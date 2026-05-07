@@ -3,6 +3,11 @@ const socket = io();
 const toggleBtn = document.getElementById('toggle');
 const muteBtn = document.getElementById('mute');
 const skipBtn = document.getElementById('skip');
+const chatEl = document.getElementById('chat');
+const messagesEl = document.getElementById('messages');
+const chatForm = document.getElementById('chat-form');
+const chatInput = document.getElementById('chat-input');
+const chatSend = document.getElementById('chat-send');
 const statusEl = document.getElementById('status');
 const orbEl = document.getElementById('orb');
 const remoteAudio = document.getElementById('remote-audio');
@@ -15,6 +20,7 @@ const ICE_SERVERS = [
 let pc = null;
 let localStream = null;
 let isMuted = false;
+let chatChannel = null;
 
 function setStatus(text, orbState) {
   statusEl.textContent = text;
@@ -28,12 +34,15 @@ function setActive(active) {
     toggleBtn.classList.add('danger');
     muteBtn.disabled = false;
     skipBtn.disabled = false;
+    chatEl.classList.remove('hidden');
   } else {
     toggleBtn.textContent = 'Start';
     toggleBtn.classList.remove('danger');
     toggleBtn.classList.add('primary');
     muteBtn.disabled = true;
     skipBtn.disabled = true;
+    chatEl.classList.add('hidden');
+    clearChat();
   }
 }
 
@@ -43,6 +52,33 @@ function applyMute() {
   }
   muteBtn.textContent = isMuted ? 'Unmute' : 'Mute';
   muteBtn.classList.toggle('muted', isMuted);
+}
+
+function appendMessage(text, who) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + who;
+  div.textContent = text;
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function clearChat() {
+  messagesEl.innerHTML = '';
+  chatInput.value = '';
+}
+
+function setupChatChannel(channel) {
+  chatChannel = channel;
+  channel.onopen = () => {
+    chatInput.disabled = false;
+    chatSend.disabled = false;
+    appendMessage('Connected. Say hi.', 'system');
+  };
+  channel.onmessage = (e) => appendMessage(e.data, 'them');
+  channel.onclose = () => {
+    chatInput.disabled = true;
+    chatSend.disabled = true;
+  };
 }
 
 async function ensureMic() {
@@ -58,10 +94,16 @@ async function ensureMic() {
   }
 }
 
-function createPeer() {
+function createPeer(initiator) {
   pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
   localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
+
+  if (initiator) {
+    setupChatChannel(pc.createDataChannel('chat'));
+  } else {
+    pc.ondatachannel = (e) => setupChatChannel(e.channel);
+  }
 
   pc.ontrack = (e) => {
     remoteAudio.srcObject = e.streams[0];
@@ -84,11 +126,17 @@ function createPeer() {
 }
 
 function teardownPeer() {
+  if (chatChannel) {
+    try { chatChannel.close(); } catch {}
+    chatChannel = null;
+  }
   if (pc) {
     pc.close();
     pc = null;
   }
   remoteAudio.srcObject = null;
+  chatInput.disabled = true;
+  chatSend.disabled = true;
 }
 
 async function startCall() {
@@ -116,7 +164,7 @@ function stopCall() {
 }
 
 async function handleMatch({ initiator }) {
-  createPeer();
+  createPeer(initiator);
   if (initiator) {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
@@ -148,6 +196,7 @@ socket.on('matched', handleMatch);
 socket.on('signal', handleSignal);
 socket.on('partner-left', () => {
   teardownPeer();
+  clearChat();
   setStatus('They left. Finding someone new…', 'searching');
   socket.emit('find-partner');
 });
@@ -164,8 +213,18 @@ muteBtn.addEventListener('click', () => {
 
 skipBtn.addEventListener('click', () => {
   teardownPeer();
+  clearChat();
   setStatus('Finding someone new…', 'searching');
   socket.emit('find-partner');
+});
+
+chatForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const text = chatInput.value.trim();
+  if (!text || !chatChannel || chatChannel.readyState !== 'open') return;
+  chatChannel.send(text);
+  appendMessage(text, 'me');
+  chatInput.value = '';
 });
 
 setActive(false);
