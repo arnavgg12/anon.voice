@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>anon.voice — talk to a stranger</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <header>
+    <h1>anon.voice</h1>
+    <p class="tagline">Talk to a stranger. No login. No history.</p>
+  </header>
+
+  <section class="orb-wrap">
+    <div id="orb" class="orb idle"></div>
+    <p id="status" class="status">Click Start to find someone.</p>
+  </section>
+
+  <section class="controls">
+    <button id="start" class="primary">Start</button>
+    <button id="skip" disabled>Skip</button>
+    <button id="stop" disabled>Stop</button>
+  </section>
+
+  <footer>
+    <p>Be kind. Audio is peer-to-peer; nothing is recorded.</p>
+  </footer>
+
+  <audio id="remote-audio" autoplay playsinline></audio>
+</main>
+<div class="watermark">AG</div>
+<script src="/socket.io/socket.io.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
