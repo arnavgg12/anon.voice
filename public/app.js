@@ -8,6 +8,15 @@ const messagesEl = document.getElementById('messages');
 const chatForm = document.getElementById('chat-form');
 const chatInput = document.getElementById('chat-input');
 const chatSend = document.getElementById('chat-send');
+const tabs = document.querySelectorAll('.tab');
+const panels = document.querySelectorAll('.tab-panel');
+const boardEl = document.getElementById('board');
+const gameStatusEl = document.getElementById('game-status');
+const gameNewBtn = document.getElementById('game-new');
+const sudokuGridEl = document.getElementById('sudoku-grid');
+const sudokuStatusEl = document.getElementById('sudoku-status');
+const sudokuNewBtn = document.getElementById('sudoku-new');
+const sudokuPadBtns = document.querySelectorAll('.sudoku-pad button');
 const statusEl = document.getElementById('status');
 const orbEl = document.getElementById('orb');
 const remoteAudio = document.getElementById('remote-audio');
@@ -21,6 +30,8 @@ let pc = null;
 let localStream = null;
 let isMuted = false;
 let chatChannel = null;
+let board = null;
+let sudokuState = null;
 
 function setStatus(text, orbState) {
   statusEl.textContent = text;
@@ -65,6 +76,14 @@ function appendMessage(text, who) {
 function clearChat() {
   messagesEl.innerHTML = '';
   chatInput.value = '';
+  clearGame();
+  switchTab('chat');
+}
+
+function sendOverChannel(obj) {
+  if (chatChannel && chatChannel.readyState === 'open') {
+    chatChannel.send(JSON.stringify(obj));
+  }
 }
 
 function setupChatChannel(channel) {
@@ -72,13 +91,118 @@ function setupChatChannel(channel) {
   channel.onopen = () => {
     chatInput.disabled = false;
     chatSend.disabled = false;
+    gameNewBtn.disabled = false;
+    sudokuNewBtn.disabled = false;
     appendMessage('Connected. Say hi.', 'system');
   };
-  channel.onmessage = (e) => appendMessage(e.data, 'them');
+  channel.onmessage = (e) => {
+    let msg;
+    try { msg = JSON.parse(e.data); } catch { msg = { type: 'chat', text: e.data }; }
+    if (msg.type === 'chat') {
+      appendMessage(msg.text, 'them');
+    } else if (msg.type === 'game-start') {
+      startGame(msg.seed, false);
+    } else if (msg.type === 'reveal') {
+      if (board) { Minesweeper.revealCell(board, msg.x, msg.y); renderGame(); }
+    } else if (msg.type === 'flag') {
+      if (board) { Minesweeper.toggleFlag(board, msg.x, msg.y); renderGame(); }
+    } else if (msg.type === 'sudoku-start') {
+      startSudoku(msg.seed, false);
+    } else if (msg.type === 'sudoku-fill') {
+      applySudokuFill(msg.i, msg.j, msg.value, 'them');
+    }
+  };
   channel.onclose = () => {
     chatInput.disabled = true;
     chatSend.disabled = true;
+    gameNewBtn.disabled = true;
+    sudokuNewBtn.disabled = true;
   };
+}
+
+function renderGame() {
+  if (!board) return;
+  Minesweeper.renderBoard(board, boardEl, gameStatusEl, {
+    onReveal: (x, y) => {
+      if (!board || board.gameOver) return;
+      Minesweeper.revealCell(board, x, y);
+      sendOverChannel({ type: 'reveal', x, y });
+      renderGame();
+    },
+    onFlag: (x, y) => {
+      if (!board || board.gameOver) return;
+      Minesweeper.toggleFlag(board, x, y);
+      sendOverChannel({ type: 'flag', x, y });
+      renderGame();
+    },
+  });
+}
+
+function startGame(seed, broadcast) {
+  board = Minesweeper.buildBoard(seed);
+  renderGame();
+  switchTab('mines');
+  if (broadcast) sendOverChannel({ type: 'game-start', seed });
+}
+
+function switchTab(name) {
+  tabs.forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
+  panels.forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== name));
+}
+
+function clearGame() {
+  board = null;
+  boardEl.innerHTML = '';
+  gameStatusEl.textContent = 'Click "New game" to start.';
+  clearSudoku();
+}
+
+function clearSudoku() {
+  sudokuState = null;
+  sudokuGridEl.innerHTML = '';
+  sudokuStatusEl.textContent = 'Click "New game" to start.';
+}
+
+function renderSudokuLocal() {
+  if (!sudokuState) return;
+  Sudoku.renderSudoku(sudokuState, sudokuGridEl, sudokuStatusEl, (idx) => {
+    if (sudokuState.givens.has(idx)) return;
+    sudokuState.selected = idx;
+    renderSudokuLocal();
+  });
+}
+
+function applySudokuFill(i, j, value, by) {
+  if (!sudokuState) return;
+  const idx = i * 9 + j;
+  if (sudokuState.givens.has(idx)) return;
+  sudokuState.puzzle[i][j] = value;
+  sudokuState.filledBy[i][j] = value ? by : null;
+  renderSudokuLocal();
+}
+
+function handleSudokuInput(value) {
+  if (!sudokuState || sudokuState.selected === null) return;
+  const i = Math.floor(sudokuState.selected / 9);
+  const j = sudokuState.selected % 9;
+  if (sudokuState.givens.has(sudokuState.selected)) return;
+  applySudokuFill(i, j, value, 'me');
+  sendOverChannel({ type: 'sudoku-fill', i, j, value });
+}
+
+function startSudoku(seed, broadcast) {
+  const { puzzle, solution, givens } = Sudoku.buildSudoku(seed);
+  sudokuState = {
+    puzzle,
+    solution,
+    givens,
+    filledBy: Array.from({ length: 9 }, () => Array(9).fill(null)),
+    selected: null,
+    seed,
+  };
+  renderSudokuLocal();
+  switchTab('sudoku');
+  if (broadcast) sendOverChannel({ type: 'sudoku-start', seed });
 }
 
 async function ensureMic() {
@@ -222,9 +346,58 @@ chatForm.addEventListener('submit', (e) => {
   e.preventDefault();
   const text = chatInput.value.trim();
   if (!text || !chatChannel || chatChannel.readyState !== 'open') return;
-  chatChannel.send(text);
+  sendOverChannel({ type: 'chat', text });
   appendMessage(text, 'me');
   chatInput.value = '';
+});
+
+tabs.forEach((tab) => {
+  tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+});
+
+gameNewBtn.addEventListener('click', () => {
+  if (!chatChannel || chatChannel.readyState !== 'open') return;
+  const seed = (Math.random() * 0x7fffffff) | 0;
+  startGame(seed, true);
+});
+
+sudokuNewBtn.addEventListener('click', () => {
+  if (!chatChannel || chatChannel.readyState !== 'open') return;
+  const seed = (Math.random() * 0x7fffffff) | 0;
+  startSudoku(seed, true);
+});
+
+sudokuPadBtns.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    handleSudokuInput(parseInt(btn.dataset.value, 10) || 0);
+  });
+});
+
+document.addEventListener('keydown', (e) => {
+  if (document.activeElement === chatInput) return;
+  const activeTab = document.querySelector('.tab.active');
+  if (!activeTab || activeTab.dataset.tab !== 'sudoku') return;
+  if (!sudokuState) return;
+  if (e.key >= '1' && e.key <= '9') {
+    handleSudokuInput(parseInt(e.key, 10));
+    e.preventDefault();
+  } else if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') {
+    handleSudokuInput(0);
+    e.preventDefault();
+  } else if (e.key.startsWith('Arrow')) {
+    if (sudokuState.selected === null) sudokuState.selected = 40;
+    else {
+      const i = Math.floor(sudokuState.selected / 9), j = sudokuState.selected % 9;
+      let ni = i, nj = j;
+      if (e.key === 'ArrowUp' && i > 0) ni--;
+      if (e.key === 'ArrowDown' && i < 8) ni++;
+      if (e.key === 'ArrowLeft' && j > 0) nj--;
+      if (e.key === 'ArrowRight' && j < 8) nj++;
+      sudokuState.selected = ni * 9 + nj;
+    }
+    renderSudokuLocal();
+    e.preventDefault();
+  }
 });
 
 setActive(false);

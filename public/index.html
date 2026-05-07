@@ -25,11 +25,47 @@
   </section>
 
   <section id="chat" class="chat hidden">
-    <div id="messages" class="messages"></div>
-    <form id="chat-form" class="chat-form" autocomplete="off">
-      <input id="chat-input" type="text" placeholder="Type a message…" maxlength="500" disabled>
-      <button id="chat-send" type="submit" disabled>Send</button>
-    </form>
+    <div class="tabs">
+      <button class="tab active" data-tab="chat">💬 Chat</button>
+      <button class="tab" data-tab="mines">💣 Mines</button>
+      <button class="tab" data-tab="sudoku">🔢 Sudoku</button>
+    </div>
+
+    <div class="tab-panel" data-panel="chat">
+      <div id="messages" class="messages"></div>
+      <form id="chat-form" class="chat-form" autocomplete="off">
+        <input id="chat-input" type="text" placeholder="Type a message…" maxlength="500" disabled>
+        <button id="chat-send" type="submit" disabled>Send</button>
+      </form>
+    </div>
+
+    <div class="tab-panel hidden" data-panel="mines">
+      <div class="game-bar">
+        <span id="game-status" class="game-status">Click "New game" to start.</span>
+        <button id="game-new" class="primary" disabled>New game</button>
+      </div>
+      <div id="board" class="board"></div>
+    </div>
+
+    <div class="tab-panel hidden" data-panel="sudoku">
+      <div class="game-bar">
+        <span id="sudoku-status" class="game-status">Click "New game" to start.</span>
+        <button id="sudoku-new" class="primary" disabled>New game</button>
+      </div>
+      <div id="sudoku-grid" class="sudoku-grid"></div>
+      <div class="sudoku-pad">
+        <button data-value="1">1</button>
+        <button data-value="2">2</button>
+        <button data-value="3">3</button>
+        <button data-value="4">4</button>
+        <button data-value="5">5</button>
+        <button data-value="6">6</button>
+        <button data-value="7">7</button>
+        <button data-value="8">8</button>
+        <button data-value="9">9</button>
+        <button data-value="0" class="clear">⌫</button>
+      </div>
+    </div>
   </section>
 
   <footer>
@@ -40,6 +76,8 @@
 </main>
 <div class="watermark">AG</div>
 <script src="/socket.io/socket.io.js"></script>
+<script src="minesweeper.js"></script>
+<script src="sudoku.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
