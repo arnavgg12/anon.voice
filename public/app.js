@@ -17,6 +17,12 @@ const sudokuGridEl = document.getElementById('sudoku-grid');
 const sudokuStatusEl = document.getElementById('sudoku-status');
 const sudokuNewBtn = document.getElementById('sudoku-new');
 const sudokuPadBtns = document.querySelectorAll('.sudoku-pad button');
+const c4GridEl = document.getElementById('c4-grid');
+const c4StatusEl = document.getElementById('c4-status');
+const c4NewBtn = document.getElementById('c4-new');
+const tttGridEl = document.getElementById('ttt-grid');
+const tttStatusEl = document.getElementById('ttt-status');
+const tttNewBtn = document.getElementById('ttt-new');
 const statusEl = document.getElementById('status');
 const orbEl = document.getElementById('orb');
 const remoteAudio = document.getElementById('remote-audio');
@@ -32,6 +38,8 @@ let isMuted = false;
 let chatChannel = null;
 let board = null;
 let sudokuState = null;
+let c4State = null;
+let tttState = null;
 
 function setStatus(text, orbState) {
   statusEl.textContent = text;
@@ -93,6 +101,8 @@ function setupChatChannel(channel) {
     chatSend.disabled = false;
     gameNewBtn.disabled = false;
     sudokuNewBtn.disabled = false;
+    c4NewBtn.disabled = false;
+    tttNewBtn.disabled = false;
     appendMessage('Connected. Say hi.', 'system');
   };
   channel.onmessage = (e) => {
@@ -110,6 +120,14 @@ function setupChatChannel(channel) {
       startSudoku(msg.seed, false);
     } else if (msg.type === 'sudoku-fill') {
       applySudokuFill(msg.i, msg.j, msg.value, 'them');
+    } else if (msg.type === 'c4-start') {
+      startConnect4(false);
+    } else if (msg.type === 'c4-drop') {
+      if (c4State) doC4Drop(msg.col);
+    } else if (msg.type === 'ttt-start') {
+      startTTT(false);
+    } else if (msg.type === 'ttt-move') {
+      if (tttState) doTTTMove(msg.idx);
     }
   };
   channel.onclose = () => {
@@ -117,6 +135,8 @@ function setupChatChannel(channel) {
     chatSend.disabled = true;
     gameNewBtn.disabled = true;
     sudokuNewBtn.disabled = true;
+    c4NewBtn.disabled = true;
+    tttNewBtn.disabled = true;
   };
 }
 
@@ -155,6 +175,96 @@ function clearGame() {
   boardEl.innerHTML = '';
   gameStatusEl.textContent = 'Click "New game" to start.';
   clearSudoku();
+  clearConnect4();
+}
+
+function clearConnect4() {
+  c4State = null;
+  c4GridEl.innerHTML = '';
+  c4StatusEl.textContent = 'Click "New game" to start.';
+  clearTTT();
+}
+
+function clearTTT() {
+  tttState = null;
+  tttGridEl.innerHTML = '';
+  tttStatusEl.textContent = 'Click "New game" to start.';
+}
+
+function renderTTTLocal() {
+  if (!tttState) return;
+  TicTacToe.renderTTT(tttState, tttGridEl, tttStatusEl, (idx) => {
+    if (!tttState || tttState.winner) return;
+    if (tttState.currentPlayer !== tttState.myPlayer) return;
+    if (tttState.board[idx] !== 0) return;
+    if (doTTTMove(idx)) sendOverChannel({ type: 'ttt-move', idx });
+  });
+}
+
+function doTTTMove(idx) {
+  if (!tttState || tttState.winner) return false;
+  if (tttState.board[idx] !== 0) return false;
+  tttState.board[idx] = tttState.currentPlayer;
+  const result = TicTacToe.evaluate(tttState.board);
+  if (result.winner) {
+    tttState.winner = result.winner;
+    tttState.winLine = result.line;
+  }
+  tttState.currentPlayer = tttState.currentPlayer === 1 ? 2 : 1;
+  renderTTTLocal();
+  return true;
+}
+
+function startTTT(broadcast) {
+  tttState = {
+    board: TicTacToe.emptyBoard(),
+    currentPlayer: 1,
+    myPlayer: broadcast ? 1 : 2,
+    winner: 0,
+    winLine: null,
+  };
+  renderTTTLocal();
+  switchTab('ttt');
+  if (broadcast) sendOverChannel({ type: 'ttt-start' });
+}
+
+function renderC4Local() {
+  if (!c4State) return;
+  Connect4.renderConnect4(c4State, c4GridEl, c4StatusEl, (col) => {
+    if (!c4State || c4State.winner) return;
+    if (c4State.currentPlayer !== c4State.myPlayer) return;
+    if (doC4Drop(col)) sendOverChannel({ type: 'c4-drop', col });
+  });
+}
+
+function doC4Drop(col) {
+  if (!c4State || c4State.winner) return false;
+  const player = c4State.currentPlayer;
+  const row = Connect4.dropPiece(c4State.board, col, player);
+  if (row === -1) return false;
+  const win = Connect4.winningCells(c4State.board, row, col, player);
+  if (win) {
+    c4State.winner = player;
+    c4State.winningCells = win;
+  } else if (Connect4.isFull(c4State.board)) {
+    c4State.winner = -1;
+  }
+  c4State.currentPlayer = c4State.currentPlayer === 1 ? 2 : 1;
+  renderC4Local();
+  return true;
+}
+
+function startConnect4(broadcast) {
+  c4State = {
+    board: Connect4.emptyBoard(),
+    currentPlayer: 1,
+    myPlayer: broadcast ? 1 : 2,
+    winner: 0,
+    winningCells: null,
+  };
+  renderC4Local();
+  switchTab('c4');
+  if (broadcast) sendOverChannel({ type: 'c4-start' });
 }
 
 function clearSudoku() {
@@ -367,6 +477,16 @@ sudokuNewBtn.addEventListener('click', () => {
   startSudoku(seed, true);
 });
 
+c4NewBtn.addEventListener('click', () => {
+  if (!chatChannel || chatChannel.readyState !== 'open') return;
+  startConnect4(true);
+});
+
+tttNewBtn.addEventListener('click', () => {
+  if (!chatChannel || chatChannel.readyState !== 'open') return;
+  startTTT(true);
+});
+
 sudokuPadBtns.forEach((btn) => {
   btn.addEventListener('click', () => {
     handleSudokuInput(parseInt(btn.dataset.value, 10) || 0);
@@ -375,28 +495,44 @@ sudokuPadBtns.forEach((btn) => {
 
 document.addEventListener('keydown', (e) => {
   if (document.activeElement === chatInput) return;
-  const activeTab = document.querySelector('.tab.active');
-  if (!activeTab || activeTab.dataset.tab !== 'sudoku') return;
-  if (!sudokuState) return;
-  if (e.key >= '1' && e.key <= '9') {
-    handleSudokuInput(parseInt(e.key, 10));
-    e.preventDefault();
-  } else if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') {
-    handleSudokuInput(0);
-    e.preventDefault();
-  } else if (e.key.startsWith('Arrow')) {
-    if (sudokuState.selected === null) sudokuState.selected = 40;
-    else {
-      const i = Math.floor(sudokuState.selected / 9), j = sudokuState.selected % 9;
-      let ni = i, nj = j;
-      if (e.key === 'ArrowUp' && i > 0) ni--;
-      if (e.key === 'ArrowDown' && i < 8) ni++;
-      if (e.key === 'ArrowLeft' && j > 0) nj--;
-      if (e.key === 'ArrowRight' && j < 8) nj++;
-      sudokuState.selected = ni * 9 + nj;
+  const activeTab = document.querySelector('.tab.active')?.dataset.tab;
+  if (!activeTab) return;
+
+  if (activeTab === 'sudoku' && sudokuState) {
+    if (e.key >= '1' && e.key <= '9') {
+      handleSudokuInput(parseInt(e.key, 10));
+      e.preventDefault();
+    } else if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') {
+      handleSudokuInput(0);
+      e.preventDefault();
+    } else if (e.key.startsWith('Arrow')) {
+      if (sudokuState.selected === null) sudokuState.selected = 40;
+      else {
+        const i = Math.floor(sudokuState.selected / 9), j = sudokuState.selected % 9;
+        let ni = i, nj = j;
+        if (e.key === 'ArrowUp' && i > 0) ni--;
+        if (e.key === 'ArrowDown' && i < 8) ni++;
+        if (e.key === 'ArrowLeft' && j > 0) nj--;
+        if (e.key === 'ArrowRight' && j < 8) nj++;
+        sudokuState.selected = ni * 9 + nj;
+      }
+      renderSudokuLocal();
+      e.preventDefault();
     }
-    renderSudokuLocal();
-    e.preventDefault();
+  } else if (activeTab === 'c4' && c4State && !c4State.winner) {
+    if (e.key >= '1' && e.key <= '7' && c4State.currentPlayer === c4State.myPlayer) {
+      const col = parseInt(e.key, 10) - 1;
+      if (doC4Drop(col)) sendOverChannel({ type: 'c4-drop', col });
+      e.preventDefault();
+    }
+  } else if (activeTab === 'ttt' && tttState && !tttState.winner) {
+    if (e.key >= '1' && e.key <= '9' && tttState.currentPlayer === tttState.myPlayer) {
+      const idx = parseInt(e.key, 10) - 1;
+      if (tttState.board[idx] === 0 && doTTTMove(idx)) {
+        sendOverChannel({ type: 'ttt-move', idx });
+      }
+      e.preventDefault();
+    }
   }
 });
 

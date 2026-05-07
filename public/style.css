@@ -167,17 +167,20 @@ audio { display: none; }
   background: transparent;
   border: none;
   border-radius: 0;
-  padding: 10px 8px;
+  padding: 12px 4px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 18px;
+  line-height: 1;
   cursor: pointer;
   border-bottom: 2px solid transparent;
+  opacity: 0.5;
+  transition: opacity 0.15s;
 }
 
-.tab:hover:not(.active) { color: var(--fg); }
+.tab:hover:not(.active) { opacity: 0.85; }
 
 .tab.active {
-  color: var(--fg);
+  opacity: 1;
   border-bottom-color: var(--accent);
 }
 
@@ -300,6 +303,8 @@ audio { display: none; }
   font-weight: 600;
   cursor: pointer;
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
   transition: background 0.1s;
 }
 
@@ -390,6 +395,123 @@ audio { display: none; }
 
 .sudoku-pad button:hover { background: #232a3b; }
 .sudoku-pad button.clear { color: #ff6b6b; }
+
+.c4-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 36px);
+  grid-template-rows: repeat(6, 36px);
+  gap: 4px;
+  padding: 8px;
+  background: #1f3a8a;
+  border-radius: 8px;
+  margin: 12px auto;
+}
+
+.c4-cell {
+  background: #0b0d12;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.c4-cell:hover { background: #181c28; }
+
+.c4-piece {
+  width: 78%;
+  height: 78%;
+  border-radius: 50%;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.c4-piece.p1 {
+  background: radial-gradient(circle at 35% 30%, #ff8585, #c0392b);
+  box-shadow: inset 0 -2px 4px rgba(0,0,0,0.4);
+}
+
+.c4-piece.p2 {
+  background: radial-gradient(circle at 35% 30%, #ffe066, #d4a017);
+  box-shadow: inset 0 -2px 4px rgba(0,0,0,0.4);
+}
+
+.c4-piece.win {
+  outline: 2px solid #fff;
+  outline-offset: -2px;
+}
+
+.ttt-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 80px);
+  grid-template-rows: repeat(3, 80px);
+  gap: 6px;
+  padding: 12px;
+  background: #0f131c;
+  border-radius: 8px;
+  margin: 24px auto;
+}
+
+.ttt-cell {
+  background: #1a1f2c;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 44px;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.1s;
+}
+
+.ttt-cell:hover { background: #232a3b; }
+.ttt-cell.p1 { color: var(--accent); }
+.ttt-cell.p2 { color: #5fd17a; }
+.ttt-cell.win {
+  background: rgba(108, 142, 255, 0.15);
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Keyboard focus visibility */
+button:focus-visible,
+.tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Mobile: show tab labels under icons + reflow sudoku pad to 2 rows */
+@media (max-width: 640px) {
+  .tab {
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 2px;
+    line-height: 1;
+  }
+
+  .tab::after {
+    content: attr(data-label);
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.4px;
+    color: inherit;
+    white-space: nowrap;
+  }
+
+  .sudoku-pad {
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 6px;
+  }
+
+  .sudoku-pad button {
+    flex: 0 0 calc(20% - 4px);
+    max-width: none;
+    padding: 10px 0;
+    font-size: 15px;
+  }
+}
 
 .watermark {
   position: fixed;

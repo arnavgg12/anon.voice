@@ -102,7 +102,26 @@ function renderBoard(board, container, statusEl, { onReveal, onFlag }) {
         div.classList.add('flagged');
         div.textContent = '🚩';
       }
-      div.addEventListener('click', () => onReveal(x, y));
+      let pressTimer = null;
+      let pressFired = false;
+      div.addEventListener('touchstart', () => {
+        pressFired = false;
+        pressTimer = setTimeout(() => {
+          onFlag(x, y);
+          pressFired = true;
+          pressTimer = null;
+        }, 450);
+      }, { passive: true });
+      const cancelPress = () => {
+        if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+      };
+      div.addEventListener('touchend', cancelPress);
+      div.addEventListener('touchmove', cancelPress);
+      div.addEventListener('touchcancel', cancelPress);
+      div.addEventListener('click', (e) => {
+        if (pressFired) { pressFired = false; e.preventDefault(); return; }
+        onReveal(x, y);
+      });
       div.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         onFlag(x, y);
