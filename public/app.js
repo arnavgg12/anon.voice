@@ -1,8 +1,8 @@
 const socket = io();
 
-const startBtn = document.getElementById('start');
+const toggleBtn = document.getElementById('toggle');
+const muteBtn = document.getElementById('mute');
 const skipBtn = document.getElementById('skip');
-const stopBtn = document.getElementById('stop');
 const statusEl = document.getElementById('status');
 const orbEl = document.getElementById('orb');
 const remoteAudio = document.getElementById('remote-audio');
@@ -14,16 +14,35 @@ const ICE_SERVERS = [
 
 let pc = null;
 let localStream = null;
+let isMuted = false;
 
 function setStatus(text, orbState) {
   statusEl.textContent = text;
   if (orbState) orbEl.className = 'orb ' + orbState;
 }
 
-function setButtons({ start, skip, stop }) {
-  startBtn.disabled = !start;
-  skipBtn.disabled = !skip;
-  stopBtn.disabled = !stop;
+function setActive(active) {
+  if (active) {
+    toggleBtn.textContent = 'Stop';
+    toggleBtn.classList.remove('primary');
+    toggleBtn.classList.add('danger');
+    muteBtn.disabled = false;
+    skipBtn.disabled = false;
+  } else {
+    toggleBtn.textContent = 'Start';
+    toggleBtn.classList.remove('danger');
+    toggleBtn.classList.add('primary');
+    muteBtn.disabled = true;
+    skipBtn.disabled = true;
+  }
+}
+
+function applyMute() {
+  if (localStream) {
+    localStream.getAudioTracks().forEach((t) => (t.enabled = !isMuted));
+  }
+  muteBtn.textContent = isMuted ? 'Unmute' : 'Mute';
+  muteBtn.classList.toggle('muted', isMuted);
 }
 
 async function ensureMic() {
@@ -79,8 +98,21 @@ async function startCall() {
     return;
   }
   setStatus('Looking for someone…', 'searching');
-  setButtons({ start: false, skip: true, stop: true });
+  setActive(true);
   socket.emit('find-partner');
+}
+
+function stopCall() {
+  teardownPeer();
+  socket.emit('leave');
+  if (localStream) {
+    localStream.getTracks().forEach((t) => t.stop());
+    localStream = null;
+  }
+  isMuted = false;
+  applyMute();
+  setStatus('Click Start to begin.', 'idle');
+  setActive(false);
 }
 
 async function handleMatch({ initiator }) {
@@ -120,7 +152,15 @@ socket.on('partner-left', () => {
   socket.emit('find-partner');
 });
 
-startBtn.addEventListener('click', startCall);
+toggleBtn.addEventListener('click', () => {
+  if (localStream) stopCall();
+  else startCall();
+});
+
+muteBtn.addEventListener('click', () => {
+  isMuted = !isMuted;
+  applyMute();
+});
 
 skipBtn.addEventListener('click', () => {
   teardownPeer();
@@ -128,15 +168,4 @@ skipBtn.addEventListener('click', () => {
   socket.emit('find-partner');
 });
 
-stopBtn.addEventListener('click', () => {
-  teardownPeer();
-  socket.emit('leave');
-  if (localStream) {
-    localStream.getTracks().forEach((t) => t.stop());
-    localStream = null;
-  }
-  setStatus('Click Start to begin.', 'idle');
-  setButtons({ start: true, skip: false, stop: false });
-});
-
-setButtons({ start: true, skip: false, stop: false });
+setActive(false);

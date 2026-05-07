@@ -116,6 +116,24 @@ button.primary {
 
 button.primary:hover:not(:disabled) { background: #7e9eff; }
 
+button.muted {
+  background: #ff6b6b;
+  border-color: #ff6b6b;
+  color: #0b0d12;
+}
+
+button.muted:hover:not(:disabled) { background: #ff8585; }
+
+button.danger {
+  background: transparent;
+  border-color: #ff6b6b;
+  color: #ff6b6b;
+}
+
+button.danger:hover:not(:disabled) {
+  background: rgba(255, 107, 107, 0.1);
+}
+
 footer {
   margin-top: 48px;
   color: var(--muted);
