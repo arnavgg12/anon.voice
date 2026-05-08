@@ -36,6 +36,7 @@
       <button class="tab" data-tab="c4" title="Connect 4" aria-label="Connect 4" data-label="C4">🔴</button>
       <button class="tab" data-tab="ttt" title="Tic-Tac-Toe" aria-label="Tic-Tac-Toe" data-label="TTT">❌</button>
       <button class="tab" data-tab="db" title="Dots and Boxes" aria-label="Dots and Boxes" data-label="Boxes">📦</button>
+      <button class="tab" data-tab="draw" title="Draw together" aria-label="Draw together" data-label="Draw">🎨</button>
     </div>
 
     <div class="tab-panel" data-panel="chat">
@@ -97,6 +98,16 @@
       </div>
       <div id="db-board" class="db-board"></div>
     </div>
+
+    <div class="tab-panel hidden" data-panel="draw">
+      <div class="game-bar">
+        <div id="draw-palette" class="draw-palette" role="toolbar" aria-label="Drawing tools"></div>
+        <button id="draw-clear" class="ghost" disabled>Clear</button>
+      </div>
+      <div class="draw-wrap">
+        <canvas id="draw-canvas"></canvas>
+      </div>
+    </div>
   </section>
 
   <footer>
@@ -113,6 +124,7 @@
 <script src="connect4.js"></script>
 <script src="tictactoe.js"></script>
 <script src="dotsboxes.js"></script>
+<script src="draw.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

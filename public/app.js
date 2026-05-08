@@ -30,6 +30,9 @@ const tttNewBtn = document.getElementById('ttt-new');
 const dbBoardEl = document.getElementById('db-board');
 const dbStatusEl = document.getElementById('db-status');
 const dbNewBtn = document.getElementById('db-new');
+const drawCanvasEl = document.getElementById('draw-canvas');
+const drawPaletteEl = document.getElementById('draw-palette');
+const drawClearBtn = document.getElementById('draw-clear');
 const statusEl = document.getElementById('status');
 const orbEl = document.getElementById('orb');
 const remoteAudio = document.getElementById('remote-audio');
@@ -51,6 +54,7 @@ let dbState = null;
 let mode = 'idle'; // 'idle' | 'random' | 'room'
 let currentRoom = null;
 const roomPeers = new Map(); // peerId -> RTCPeerConnection
+let drawApi = null;
 const participants = new Map(); // peerId -> { color, speaking, analyser, data }
 let selfAnalyser = null;
 let selfData = null;
@@ -150,6 +154,7 @@ function setupChatChannel(channel) {
     c4NewBtn.disabled = false;
     tttNewBtn.disabled = false;
     dbNewBtn.disabled = false;
+    drawClearBtn.disabled = false;
     appendMessage('Connected. Say hi.', 'system');
   };
   channel.onmessage = (e) => {
@@ -179,6 +184,10 @@ function setupChatChannel(channel) {
       startDotsBoxes(false);
     } else if (msg.type === 'db-line') {
       if (dbState) doDBLine(msg.kind, msg.row, msg.col);
+    } else if (msg.type === 'draw-seg') {
+      if (drawApi) drawApi.drawSegment(msg.x1, msg.y1, msg.x2, msg.y2, msg.color, msg.width);
+    } else if (msg.type === 'draw-clear') {
+      if (drawApi) drawApi.clear();
     }
   };
   channel.onclose = () => {
@@ -189,8 +198,43 @@ function setupChatChannel(channel) {
     c4NewBtn.disabled = true;
     tttNewBtn.disabled = true;
     dbNewBtn.disabled = true;
+    drawClearBtn.disabled = true;
   };
 }
+
+function setupDrawingPanel() {
+  if (drawApi) return;
+  drawApi = Draw.setupDraw(drawCanvasEl, {
+    onSegment: (x1, y1, x2, y2, color, width) => {
+      sendOverChannel({ type: 'draw-seg', x1, y1, x2, y2, color, width });
+    },
+  });
+  // Build palette
+  drawPaletteEl.innerHTML = '';
+  const colors = [...Draw.COLORS, Draw.ERASER];
+  colors.forEach((color, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'swatch' + (i === 0 ? ' active' : '') + (color === Draw.ERASER ? ' eraser' : '');
+    btn.style.setProperty('--swatch-color', color);
+    btn.setAttribute('aria-label', color === Draw.ERASER ? 'Eraser' : 'Color ' + color);
+    btn.addEventListener('click', () => {
+      drawPaletteEl.querySelectorAll('.swatch').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      drawApi.setColor(color);
+      drawApi.setWidth(color === Draw.ERASER ? 14 : 3);
+    });
+    drawPaletteEl.appendChild(btn);
+  });
+}
+
+drawClearBtn.addEventListener('click', () => {
+  if (!drawApi) return;
+  drawApi.clear();
+  sendOverChannel({ type: 'draw-clear' });
+});
+
+// Initialize draw panel on DOM ready (canvas setup is cheap; no harm)
+setupDrawingPanel();
 
 function renderGame() {
   if (!board) return;
@@ -220,6 +264,10 @@ function startGame(seed, broadcast) {
 function switchTab(name) {
   tabs.forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
   panels.forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== name));
+  // Canvas needs correct backing-pixel size after becoming visible
+  if (name === 'draw' && drawApi) {
+    requestAnimationFrame(() => drawApi.redrawAll());
+  }
 }
 
 function clearGame() {
