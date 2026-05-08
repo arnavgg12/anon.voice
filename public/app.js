@@ -1,8 +1,11 @@
 const socket = io();
 
 const toggleBtn = document.getElementById('toggle');
+const loungeBtn = document.getElementById('join-lounge');
+const chillBtn = document.getElementById('join-chill');
 const muteBtn = document.getElementById('mute');
 const skipBtn = document.getElementById('skip');
+const peerAudiosEl = document.getElementById('peer-audios');
 const chatEl = document.getElementById('chat');
 const messagesEl = document.getElementById('messages');
 const chatForm = document.getElementById('chat-form');
@@ -44,26 +47,49 @@ let sudokuState = null;
 let c4State = null;
 let tttState = null;
 let dbState = null;
+let mode = 'idle'; // 'idle' | 'random' | 'room'
+let currentRoom = null;
+const roomPeers = new Map(); // peerId -> RTCPeerConnection
 
 function setStatus(text, orbState) {
   statusEl.textContent = text;
   if (orbState) orbEl.className = 'orb ' + orbState;
 }
 
-function setActive(active) {
+function setActive(active, activeMode = 'random') {
+  const tabsEl = document.querySelector('.tabs');
   if (active) {
-    toggleBtn.textContent = 'Stop';
+    toggleBtn.textContent = activeMode === 'room' ? `Leave ${currentRoom}` : 'Stop';
     toggleBtn.classList.remove('primary');
     toggleBtn.classList.add('danger');
+    loungeBtn.classList.add('hidden');
+    chillBtn.classList.add('hidden');
+    muteBtn.classList.remove('hidden');
     muteBtn.disabled = false;
-    skipBtn.disabled = false;
+    if (activeMode === 'random') {
+      skipBtn.classList.remove('hidden');
+      skipBtn.disabled = false;
+      tabsEl.classList.remove('room-mode');
+    } else {
+      skipBtn.classList.add('hidden');
+      tabsEl.classList.add('room-mode');
+      switchTab('chat');
+      // Room mode: chat goes via server, enable immediately
+      chatInput.disabled = false;
+      chatSend.disabled = false;
+    }
     chatEl.classList.remove('hidden');
   } else {
-    toggleBtn.textContent = 'Start';
+    toggleBtn.textContent = '🎲 Random stranger';
     toggleBtn.classList.remove('danger');
     toggleBtn.classList.add('primary');
+    loungeBtn.classList.remove('hidden');
+    chillBtn.classList.remove('hidden');
+    muteBtn.classList.add('hidden');
     muteBtn.disabled = true;
+    skipBtn.classList.add('hidden');
     skipBtn.disabled = true;
+    tabsEl.classList.remove('room-mode');
     chatEl.classList.add('hidden');
     clearChat();
   }
@@ -418,17 +444,15 @@ function teardownPeer() {
 }
 
 async function startCall() {
-  try {
-    await ensureMic();
-  } catch {
-    return;
-  }
+  try { await ensureMic(); } catch { return; }
   setStatus('Looking for someone…', 'searching');
-  setActive(true);
+  mode = 'random';
+  setActive(true, 'random');
   socket.emit('find-partner');
 }
 
 function stopCall() {
+  if (mode === 'room') return leaveRoom();
   teardownPeer();
   socket.emit('leave');
   if (localStream) {
@@ -437,9 +461,120 @@ function stopCall() {
   }
   isMuted = false;
   applyMute();
-  setStatus('Click Start to begin.', 'idle');
+  setStatus('Pick a mode to begin.', 'idle');
+  mode = 'idle';
   setActive(false);
 }
+
+async function joinRoom(roomName) {
+  try { await ensureMic(); } catch { return; }
+  currentRoom = roomName;
+  mode = 'room';
+  setStatus(`Joining ${roomName}…`, 'searching');
+  setActive(true, 'room');
+  socket.emit('join-room', { room: roomName });
+}
+
+function leaveRoom() {
+  socket.emit('leave');
+  for (const [, pc] of roomPeers) pc.close();
+  roomPeers.clear();
+  peerAudiosEl.innerHTML = '';
+  if (localStream) {
+    localStream.getTracks().forEach((t) => t.stop());
+    localStream = null;
+  }
+  isMuted = false;
+  applyMute();
+  setStatus('Pick a mode to begin.', 'idle');
+  currentRoom = null;
+  mode = 'idle';
+  setActive(false);
+}
+
+function createRoomPeer(peerId, initiator) {
+  const peerPc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  localStream.getTracks().forEach((t) => peerPc.addTrack(t, localStream));
+  peerPc.ontrack = (e) => {
+    let audio = document.getElementById(`audio-${peerId}`);
+    if (!audio) {
+      audio = document.createElement('audio');
+      audio.id = `audio-${peerId}`;
+      audio.autoplay = true;
+      audio.playsInline = true;
+      peerAudiosEl.appendChild(audio);
+    }
+    audio.srcObject = e.streams[0];
+  };
+  peerPc.onicecandidate = (e) => {
+    if (e.candidate) {
+      socket.emit('room-signal', { to: peerId, type: 'ice', candidate: e.candidate });
+    }
+  };
+  roomPeers.set(peerId, peerPc);
+  if (initiator) {
+    (async () => {
+      const offer = await peerPc.createOffer();
+      await peerPc.setLocalDescription(offer);
+      socket.emit('room-signal', { to: peerId, type: 'offer', sdp: offer });
+    })();
+  }
+  return peerPc;
+}
+
+function removeRoomPeer(peerId) {
+  const p = roomPeers.get(peerId);
+  if (p) { p.close(); roomPeers.delete(peerId); }
+  document.getElementById(`audio-${peerId}`)?.remove();
+}
+
+socket.on('room-joined', ({ room, peers }) => {
+  setStatus(`In ${room} — ${peers.length + 1} here. Say hi.`, 'live');
+  // Existing peers will initiate offers to me; I just need to be ready.
+  // We pre-create RTCPeerConnections for each existing peer in non-initiator mode.
+  for (const peerId of peers) createRoomPeer(peerId, false);
+});
+
+socket.on('peer-joined', ({ peerId }) => {
+  // Someone new arrived — I'm an existing peer, so I send the offer.
+  if (mode !== 'room') return;
+  createRoomPeer(peerId, true);
+});
+
+socket.on('peer-left', ({ peerId }) => {
+  removeRoomPeer(peerId);
+});
+
+socket.on('room-count', ({ count }) => {
+  if (mode === 'room' && currentRoom) {
+    setStatus(`In ${currentRoom} — ${count} here.`, count > 1 ? 'live' : 'searching');
+  }
+});
+
+socket.on('room-signal', async ({ from, type, sdp, candidate }) => {
+  let peerPc = roomPeers.get(from);
+  if (!peerPc && type === 'offer') peerPc = createRoomPeer(from, false);
+  if (!peerPc) return;
+  try {
+    if (type === 'offer') {
+      await peerPc.setRemoteDescription(new RTCSessionDescription(sdp));
+      const answer = await peerPc.createAnswer();
+      await peerPc.setLocalDescription(answer);
+      socket.emit('room-signal', { to: from, type: 'answer', sdp: answer });
+    } else if (type === 'answer') {
+      await peerPc.setRemoteDescription(new RTCSessionDescription(sdp));
+    } else if (type === 'ice') {
+      await peerPc.addIceCandidate(new RTCIceCandidate(candidate));
+    }
+  } catch (err) {
+    console.warn('Room signal error:', err);
+  }
+});
+
+socket.on('room-text', ({ from, text }) => {
+  const short = (from || '').slice(0, 4);
+  appendMessage(`${short}: ${text}`, 'them');
+});
 
 async function handleMatch({ initiator }) {
   createPeer(initiator);
@@ -480,9 +615,13 @@ socket.on('partner-left', () => {
 });
 
 toggleBtn.addEventListener('click', () => {
-  if (localStream) stopCall();
+  if (mode === 'room') leaveRoom();
+  else if (localStream) stopCall();
   else startCall();
 });
+
+loungeBtn.addEventListener('click', () => joinRoom('lounge'));
+chillBtn.addEventListener('click', () => joinRoom('chill'));
 
 muteBtn.addEventListener('click', () => {
   isMuted = !isMuted;
@@ -499,9 +638,15 @@ skipBtn.addEventListener('click', () => {
 chatForm.addEventListener('submit', (e) => {
   e.preventDefault();
   const text = chatInput.value.trim();
-  if (!text || !chatChannel || chatChannel.readyState !== 'open') return;
-  sendOverChannel({ type: 'chat', text });
-  appendMessage(text, 'me');
+  if (!text) return;
+  if (mode === 'room') {
+    socket.emit('room-text', { text });
+    appendMessage(text, 'me');
+  } else {
+    if (!chatChannel || chatChannel.readyState !== 'open') return;
+    sendOverChannel({ type: 'chat', text });
+    appendMessage(text, 'me');
+  }
   chatInput.value = '';
 });
 

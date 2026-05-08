@@ -92,6 +92,17 @@ header h1 {
   flex-wrap: wrap;
 }
 
+.controls button.hidden { display: none; }
+.tabs.room-mode .tab[data-tab="mines"],
+.tabs.room-mode .tab[data-tab="sudoku"],
+.tabs.room-mode .tab[data-tab="c4"],
+.tabs.room-mode .tab[data-tab="ttt"],
+.tabs.room-mode .tab[data-tab="db"] {
+  display: none;
+}
+
+#peer-audios { display: none; }
+
 button {
   padding: 12px 22px;
   border-radius: 999px;

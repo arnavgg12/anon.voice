@@ -15,13 +15,15 @@
 
   <section class="orb-wrap">
     <div id="orb" class="orb idle"></div>
-    <p id="status" class="status" role="status" aria-live="polite">Click Start to find someone.</p>
+    <p id="status" class="status" role="status" aria-live="polite">Pick a mode to begin.</p>
   </section>
 
   <section class="controls">
-    <button id="toggle" class="primary">Start</button>
-    <button id="mute" disabled>Mute</button>
-    <button id="skip" disabled>Skip</button>
+    <button id="toggle" class="primary">🎲 Random stranger</button>
+    <button id="join-lounge" class="primary">🛋️ Lounge</button>
+    <button id="join-chill" class="primary">🌙 Chill</button>
+    <button id="mute" class="hidden" disabled>Mute</button>
+    <button id="skip" class="hidden" disabled>Skip</button>
   </section>
 
   <section id="chat" class="chat hidden">
@@ -100,6 +102,7 @@
   </footer>
 
   <audio id="remote-audio" autoplay playsinline></audio>
+  <div id="peer-audios" aria-hidden="true"></div>
 </main>
 <div class="watermark">AG</div>
 <script src="/socket.io/socket.io.js"></script>
