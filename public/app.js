@@ -6,6 +6,7 @@ const chillBtn = document.getElementById('join-chill');
 const muteBtn = document.getElementById('mute');
 const skipBtn = document.getElementById('skip');
 const peerAudiosEl = document.getElementById('peer-audios');
+const participantsEl = document.getElementById('participants');
 const chatEl = document.getElementById('chat');
 const messagesEl = document.getElementById('messages');
 const chatForm = document.getElementById('chat-form');
@@ -50,6 +51,21 @@ let dbState = null;
 let mode = 'idle'; // 'idle' | 'random' | 'room'
 let currentRoom = null;
 const roomPeers = new Map(); // peerId -> RTCPeerConnection
+const participants = new Map(); // peerId -> { color, speaking, analyser, data }
+let selfAnalyser = null;
+let selfData = null;
+let sharedAudioCtx = null;
+let activityRafId = null;
+
+function colorForId(id) {
+  let hash = 0;
+  for (const ch of String(id || '')) hash = (hash * 31 + ch.charCodeAt(0)) | 0;
+  return `hsl(${Math.abs(hash) % 360}, 70%, 65%)`;
+}
+
+function shortId(id) {
+  return String(id || '????').slice(0, 4);
+}
 
 function setStatus(text, orbState) {
   statusEl.textContent = text;
@@ -472,6 +488,9 @@ async function joinRoom(roomName) {
   mode = 'room';
   setStatus(`Joining ${roomName}…`, 'searching');
   setActive(true, 'room');
+  attachSelfAnalyser();
+  startActivityLoop();
+  renderParticipants();
   socket.emit('join-room', { room: roomName });
 }
 
@@ -479,11 +498,16 @@ function leaveRoom() {
   socket.emit('leave');
   for (const [, pc] of roomPeers) pc.close();
   roomPeers.clear();
+  participants.clear();
   peerAudiosEl.innerHTML = '';
+  participantsEl.classList.add('hidden');
+  participantsEl.innerHTML = '';
+  stopActivityLoop();
   if (localStream) {
     localStream.getTracks().forEach((t) => t.stop());
     localStream = null;
   }
+  selfAnalyser = null; selfData = null;
   isMuted = false;
   applyMute();
   setStatus('Pick a mode to begin.', 'idle');
@@ -492,9 +516,109 @@ function leaveRoom() {
   setActive(false);
 }
 
+function makeChip(id, isMe) {
+  const color = colorForId(id);
+  const chip = document.createElement('span');
+  chip.className = 'chip' + (isMe ? ' me' : '');
+  chip.dataset.pid = id;
+  chip.style.setProperty('--chip-color', color);
+  const dot = document.createElement('span');
+  dot.className = 'chip-dot';
+  const label = document.createElement('span');
+  label.className = 'chip-label';
+  label.textContent = isMe ? 'you' : shortId(id);
+  chip.appendChild(dot);
+  chip.appendChild(label);
+  return chip;
+}
+
+function renderParticipants() {
+  if (mode !== 'room') {
+    participantsEl.classList.add('hidden');
+    return;
+  }
+  participantsEl.classList.remove('hidden');
+  participantsEl.innerHTML = '';
+  participantsEl.appendChild(makeChip(socket.id || 'me', true));
+  for (const pid of participants.keys()) {
+    participantsEl.appendChild(makeChip(pid, false));
+  }
+}
+
+function ensureAudioCtx() {
+  if (!sharedAudioCtx) sharedAudioCtx = new AudioContext();
+  if (sharedAudioCtx.state === 'suspended') sharedAudioCtx.resume();
+}
+
+function attachSelfAnalyser() {
+  if (!localStream) return;
+  ensureAudioCtx();
+  const src = sharedAudioCtx.createMediaStreamSource(localStream);
+  selfAnalyser = sharedAudioCtx.createAnalyser();
+  selfAnalyser.fftSize = 512;
+  src.connect(selfAnalyser);
+  selfData = new Uint8Array(selfAnalyser.frequencyBinCount);
+}
+
+function attachPeerAnalyser(peerId, stream) {
+  ensureAudioCtx();
+  const src = sharedAudioCtx.createMediaStreamSource(stream);
+  const analyser = sharedAudioCtx.createAnalyser();
+  analyser.fftSize = 512;
+  src.connect(analyser);
+  const p = participants.get(peerId);
+  if (p) {
+    p.analyser = analyser;
+    p.data = new Uint8Array(analyser.frequencyBinCount);
+  }
+}
+
+function avgLevel(data, analyser) {
+  if (!analyser || !data) return 0;
+  analyser.getByteFrequencyData(data);
+  let sum = 0;
+  for (let i = 0; i < data.length; i++) sum += data[i];
+  return sum / data.length;
+}
+
+const SPEAKING_THRESHOLD = 14;
+
+function activityTick() {
+  if (mode !== 'room') { activityRafId = null; return; }
+  const setSpeaking = (sel, on) => {
+    const el = participantsEl.querySelector(sel);
+    if (!el) return;
+    if (on !== el.classList.contains('speaking')) el.classList.toggle('speaking', on);
+  };
+  // Self
+  const selfLvl = avgLevel(selfData, selfAnalyser);
+  setSpeaking('.chip.me', selfLvl > SPEAKING_THRESHOLD && !isMuted);
+  // Peers
+  for (const [pid, p] of participants) {
+    const lvl = avgLevel(p.data, p.analyser);
+    p.speaking = lvl > SPEAKING_THRESHOLD;
+    setSpeaking(`.chip[data-pid="${CSS.escape(pid)}"]`, p.speaking);
+  }
+  activityRafId = requestAnimationFrame(activityTick);
+}
+
+function startActivityLoop() {
+  if (activityRafId) return;
+  activityRafId = requestAnimationFrame(activityTick);
+}
+
+function stopActivityLoop() {
+  if (activityRafId) cancelAnimationFrame(activityRafId);
+  activityRafId = null;
+}
+
 function createRoomPeer(peerId, initiator) {
   const peerPc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
   localStream.getTracks().forEach((t) => peerPc.addTrack(t, localStream));
+  if (!participants.has(peerId)) {
+    participants.set(peerId, { color: colorForId(peerId), speaking: false });
+  }
+  renderParticipants();
   peerPc.ontrack = (e) => {
     let audio = document.getElementById(`audio-${peerId}`);
     if (!audio) {
@@ -505,6 +629,7 @@ function createRoomPeer(peerId, initiator) {
       peerAudiosEl.appendChild(audio);
     }
     audio.srcObject = e.streams[0];
+    attachPeerAnalyser(peerId, e.streams[0]);
   };
   peerPc.onicecandidate = (e) => {
     if (e.candidate) {
@@ -526,6 +651,8 @@ function removeRoomPeer(peerId) {
   const p = roomPeers.get(peerId);
   if (p) { p.close(); roomPeers.delete(peerId); }
   document.getElementById(`audio-${peerId}`)?.remove();
+  participants.delete(peerId);
+  renderParticipants();
 }
 
 socket.on('room-joined', ({ room, peers }) => {
@@ -572,8 +699,34 @@ socket.on('room-signal', async ({ from, type, sdp, candidate }) => {
 });
 
 socket.on('room-text', ({ from, text }) => {
-  const short = (from || '').slice(0, 4);
-  appendMessage(`${short}: ${text}`, 'them');
+  const div = document.createElement('div');
+  div.className = 'msg them';
+  const sender = document.createElement('span');
+  sender.className = 'msg-sender';
+  sender.style.color = colorForId(from);
+  sender.textContent = shortId(from);
+  div.appendChild(sender);
+  div.appendChild(document.createTextNode(text));
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+});
+
+socket.on('room-full', ({ room, cap }) => {
+  setStatus(`${room} is full (${cap} max). Try again later.`, 'idle');
+  // Reset to idle if we were trying to join
+  if (mode === 'room') {
+    leaveRoom();
+  }
+});
+
+socket.on('skip-cooldown', ({ ms }) => {
+  const sec = Math.ceil(ms / 1000);
+  setStatus(`Slow down — try again in ${sec}s.`, 'idle');
+  // Re-enable Skip after the cooldown
+  if (skipBtn) {
+    skipBtn.disabled = true;
+    setTimeout(() => { if (mode === 'random') skipBtn.disabled = false; }, ms);
+  }
 });
 
 async function handleMatch({ initiator }) {

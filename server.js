@@ -12,6 +12,9 @@ const io = new Server(server);
 let waiting = null;
 const partners = new Map();
 const ROOMS = new Set(['lounge', 'chill']);
+const ROOM_CAP = 5;
+const SKIP_COOLDOWN_MS = 3000;
+const lastFindPartner = new Map();
 
 function cleanupPartner(socket) {
   const partnerId = partners.get(socket.id);
@@ -36,6 +39,13 @@ function leaveRoom(socket) {
 
 io.on('connection', (socket) => {
   socket.on('find-partner', () => {
+    const last = lastFindPartner.get(socket.id) || 0;
+    const wait = SKIP_COOLDOWN_MS - (Date.now() - last);
+    if (wait > 0) {
+      socket.emit('skip-cooldown', { ms: wait });
+      return;
+    }
+    lastFindPartner.set(socket.id, Date.now());
     cleanupPartner(socket);
     leaveRoom(socket);
 
@@ -59,10 +69,15 @@ io.on('connection', (socket) => {
 
   socket.on('join-room', ({ room }) => {
     if (!ROOMS.has(room)) return;
+    const existingSet = io.sockets.adapter.rooms.get(room) || new Set();
+    if (existingSet.size >= ROOM_CAP) {
+      socket.emit('room-full', { room, cap: ROOM_CAP });
+      return;
+    }
     cleanupPartner(socket);
     leaveRoom(socket);
 
-    const existing = Array.from(io.sockets.adapter.rooms.get(room) || []);
+    const existing = Array.from(existingSet);
     socket.join(room);
     socket.data.room = room;
 
@@ -85,7 +100,11 @@ io.on('connection', (socket) => {
   });
 
   socket.on('leave', () => { cleanupPartner(socket); leaveRoom(socket); });
-  socket.on('disconnect', () => { cleanupPartner(socket); leaveRoom(socket); });
+  socket.on('disconnect', () => {
+    cleanupPartner(socket);
+    leaveRoom(socket);
+    lastFindPartner.delete(socket.id);
+  });
 });
 
 const PORT = process.env.PORT || 3000;
