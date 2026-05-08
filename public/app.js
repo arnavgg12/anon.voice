@@ -23,6 +23,9 @@ const c4NewBtn = document.getElementById('c4-new');
 const tttGridEl = document.getElementById('ttt-grid');
 const tttStatusEl = document.getElementById('ttt-status');
 const tttNewBtn = document.getElementById('ttt-new');
+const dbBoardEl = document.getElementById('db-board');
+const dbStatusEl = document.getElementById('db-status');
+const dbNewBtn = document.getElementById('db-new');
 const statusEl = document.getElementById('status');
 const orbEl = document.getElementById('orb');
 const remoteAudio = document.getElementById('remote-audio');
@@ -40,6 +43,7 @@ let board = null;
 let sudokuState = null;
 let c4State = null;
 let tttState = null;
+let dbState = null;
 
 function setStatus(text, orbState) {
   statusEl.textContent = text;
@@ -103,6 +107,7 @@ function setupChatChannel(channel) {
     sudokuNewBtn.disabled = false;
     c4NewBtn.disabled = false;
     tttNewBtn.disabled = false;
+    dbNewBtn.disabled = false;
     appendMessage('Connected. Say hi.', 'system');
   };
   channel.onmessage = (e) => {
@@ -128,6 +133,10 @@ function setupChatChannel(channel) {
       startTTT(false);
     } else if (msg.type === 'ttt-move') {
       if (tttState) doTTTMove(msg.idx);
+    } else if (msg.type === 'db-start') {
+      startDotsBoxes(false);
+    } else if (msg.type === 'db-line') {
+      if (dbState) doDBLine(msg.kind, msg.row, msg.col);
     }
   };
   channel.onclose = () => {
@@ -137,6 +146,7 @@ function setupChatChannel(channel) {
     sudokuNewBtn.disabled = true;
     c4NewBtn.disabled = true;
     tttNewBtn.disabled = true;
+    dbNewBtn.disabled = true;
   };
 }
 
@@ -189,6 +199,40 @@ function clearTTT() {
   tttState = null;
   tttGridEl.innerHTML = '';
   tttStatusEl.textContent = 'Click "New game" to start.';
+  clearDotsBoxes();
+}
+
+function clearDotsBoxes() {
+  dbState = null;
+  dbBoardEl.innerHTML = '';
+  dbStatusEl.textContent = 'Click "New game" to start.';
+}
+
+function renderDBLocal() {
+  if (!dbState) return;
+  DotsBoxes.renderDotsBoxes(dbState, dbBoardEl, dbStatusEl, (kind, row, col) => {
+    if (!dbState || dbState.winner) return;
+    if (dbState.currentPlayer !== dbState.myPlayer) return;
+    if (doDBLine(kind, row, col)) {
+      sendOverChannel({ type: 'db-line', kind, row, col });
+    }
+  });
+}
+
+function doDBLine(kind, row, col) {
+  if (!dbState || dbState.winner) return false;
+  const lines = kind === 'h' ? dbState.hLines : dbState.vLines;
+  if (lines[row][col] !== 0) return false;
+  DotsBoxes.applyLine(dbState, kind, row, col);
+  renderDBLocal();
+  return true;
+}
+
+function startDotsBoxes(broadcast) {
+  dbState = DotsBoxes.emptyState(broadcast ? 1 : 2);
+  renderDBLocal();
+  switchTab('db');
+  if (broadcast) sendOverChannel({ type: 'db-start' });
 }
 
 function renderTTTLocal() {
@@ -485,6 +529,11 @@ c4NewBtn.addEventListener('click', () => {
 tttNewBtn.addEventListener('click', () => {
   if (!chatChannel || chatChannel.readyState !== 'open') return;
   startTTT(true);
+});
+
+dbNewBtn.addEventListener('click', () => {
+  if (!chatChannel || chatChannel.readyState !== 'open') return;
+  startDotsBoxes(true);
 });
 
 sudokuPadBtns.forEach((btn) => {

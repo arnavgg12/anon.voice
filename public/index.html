@@ -31,6 +31,7 @@
       <button class="tab" data-tab="sudoku" title="Sudoku" aria-label="Sudoku" data-label="Sudoku">🔢</button>
       <button class="tab" data-tab="c4" title="Connect 4" aria-label="Connect 4" data-label="C4">🔴</button>
       <button class="tab" data-tab="ttt" title="Tic-Tac-Toe" aria-label="Tic-Tac-Toe" data-label="TTT">❌</button>
+      <button class="tab" data-tab="db" title="Dots and Boxes" aria-label="Dots and Boxes" data-label="Boxes">📦</button>
     </div>
 
     <div class="tab-panel" data-panel="chat">
@@ -84,6 +85,14 @@
       </div>
       <div id="ttt-grid" class="ttt-grid"></div>
     </div>
+
+    <div class="tab-panel hidden" data-panel="db">
+      <div class="game-bar">
+        <span id="db-status" class="game-status">Click "New game" to start.</span>
+        <button id="db-new" class="primary" disabled>New game</button>
+      </div>
+      <div id="db-board" class="db-board"></div>
+    </div>
   </section>
 
   <footer>
@@ -98,6 +107,7 @@
 <script src="sudoku.js"></script>
 <script src="connect4.js"></script>
 <script src="tictactoe.js"></script>
+<script src="dotsboxes.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

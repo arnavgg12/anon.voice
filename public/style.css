@@ -474,6 +474,47 @@ audio { display: none; }
   outline-offset: -2px;
 }
 
+.db-board {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  overflow: auto;
+}
+
+.db-svg {
+  width: min(100%, 300px);
+  height: auto;
+  display: block;
+  background: #0f131c;
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.db-dot { fill: #6c8eff; }
+
+.db-line {
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.db-line.empty { stroke: #2a3042; }
+.db-line.empty:hover { stroke: rgba(108, 142, 255, 0.5); }
+.db-line.claimed { stroke-width: 5; }
+.db-line.claimed.p1 { stroke: var(--accent); }
+.db-line.claimed.p2 { stroke: #5fd17a; }
+
+.db-line-hit {
+  stroke: transparent;
+  stroke-width: 18;
+  cursor: pointer;
+}
+
+.db-box { fill-opacity: 0.18; }
+.db-box.p1 { fill: var(--accent); }
+.db-box.p2 { fill: #5fd17a; }
+
 /* Keyboard focus visibility */
 button:focus-visible,
 .tab:focus-visible {
