@@ -93,6 +93,18 @@ header h1 {
 }
 
 .controls button.hidden { display: none; }
+
+.count {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  background: rgba(11, 13, 18, 0.25);
+  color: inherit;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: middle;
+}
 .tabs.room-mode .tab[data-tab="mines"],
 .tabs.room-mode .tab[data-tab="sudoku"],
 .tabs.room-mode .tab[data-tab="c4"],

@@ -33,11 +33,26 @@ function leaveRoom(socket) {
   socket.to(room).emit('peer-left', { peerId: socket.id });
   socket.leave(room);
   socket.data.room = null;
-  // Notify everyone in room of new participant count
   io.to(room).emit('room-count', { count: io.sockets.adapter.rooms.get(room)?.size || 0 });
+  broadcastLobbyCounts();
+}
+
+function getLobbyCounts() {
+  const counts = {};
+  for (const room of ROOMS) {
+    counts[room] = io.sockets.adapter.rooms.get(room)?.size || 0;
+  }
+  return counts;
+}
+
+function broadcastLobbyCounts() {
+  io.emit('lobby-counts', getLobbyCounts());
 }
 
 io.on('connection', (socket) => {
+  // Send current lobby counts to the newly-connected client
+  socket.emit('lobby-counts', getLobbyCounts());
+
   socket.on('find-partner', () => {
     const last = lastFindPartner.get(socket.id) || 0;
     const wait = SKIP_COOLDOWN_MS - (Date.now() - last);
@@ -84,6 +99,7 @@ io.on('connection', (socket) => {
     socket.emit('room-joined', { room, peers: existing });
     socket.to(room).emit('peer-joined', { peerId: socket.id });
     io.to(room).emit('room-count', { count: io.sockets.adapter.rooms.get(room).size });
+    broadcastLobbyCounts();
   });
 
   // Room signaling — `to` field routes to a specific peer in the room

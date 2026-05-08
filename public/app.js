@@ -711,6 +711,12 @@ socket.on('room-text', ({ from, text }) => {
   messagesEl.scrollTop = messagesEl.scrollHeight;
 });
 
+socket.on('lobby-counts', (counts) => {
+  document.querySelectorAll('.count[data-room]').forEach((el) => {
+    el.textContent = counts[el.dataset.room] ?? 0;
+  });
+});
+
 socket.on('room-full', ({ room, cap }) => {
   setStatus(`${room} is full (${cap} max). Try again later.`, 'idle');
   // Reset to idle if we were trying to join
