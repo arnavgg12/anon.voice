@@ -3,32 +3,136 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>anon.voice — talk to a stranger</title>
+<title>anon.voice — talk to strangers by voice, text, or play</title>
+<meta name="description" content="Talk to strangers by voice or text, instantly and anonymously. No login, no camera, nothing recorded. Play games together while you chat. A friendly Omegle alternative.">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<main>
-  <header>
-    <h1>anon.voice</h1>
-    <p class="tagline">Talk to a stranger. No login. No history.</p>
+
+<!-- ===================== LANDING ===================== -->
+<div id="landing">
+  <nav class="nav">
+    <div class="nav-logo">🎙️ anon.voice</div>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#faq">FAQ</a>
+      <button class="nav-cta" data-start="voice">Join now</button>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="live-pill"><span class="live-dot"></span> <span id="hero-online">0</span> online now</div>
+    <h1>Talk to strangers by<br><span class="grad">voice, text, or play</span></h1>
+    <p class="hero-sub">Press one button and you're instantly in a 1-on-1 chat with someone random. No login. No camera. Nothing recorded — when the chat ends, it's gone.</p>
+    <div class="hero-cta">
+      <button class="btn-primary big" data-start="voice">🎤 Start a voice chat</button>
+      <button class="btn-ghost big" data-start="text">💬 Start a text chat</button>
+    </div>
+    <p class="hero-fine">Free · Anonymous · 18+</p>
+
+    <div class="hero-orbit" aria-hidden="true">
+      <span class="float a">🦊</span>
+      <span class="float b">🐼</span>
+      <span class="float c">🦉</span>
+      <span class="float d">🐧</span>
+      <span class="float e">🐸</span>
+    </div>
   </header>
+
+  <section id="features" class="section">
+    <h2>Chat your way</h2>
+    <div class="cards">
+      <div class="card">
+        <div class="card-ico">🎤</div>
+        <h3>Voice chat</h3>
+        <p>Real-time audio with a stranger — no camera, no pressure. Just talk.</p>
+      </div>
+      <div class="card">
+        <div class="card-ico">💬</div>
+        <h3>Text chat</h3>
+        <p>Prefer to type? Match for text-only. No mic needed.</p>
+      </div>
+      <div class="card">
+        <div class="card-ico">🎮</div>
+        <h3>Play together</h3>
+        <p>Minesweeper, Sudoku, Connect 4, Tic-Tac-Toe, Dots & Boxes, and a shared sketchpad — right inside the chat.</p>
+      </div>
+      <div class="card">
+        <div class="card-ico">🛋️</div>
+        <h3>Public rooms</h3>
+        <p>Hop into the Lounge or Chill room and talk with a small group.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section values">
+    <div class="value"><span>🕵️</span><h4>Anonymous</h4><p>No profile, no real name.</p></div>
+    <div class="value"><span>🔓</span><h4>No login</h4><p>Guest in one click.</p></div>
+    <div class="value"><span>🗑️</span><h4>Nothing saved</h4><p>Chats vanish on disconnect.</p></div>
+    <div class="value"><span>🎥</span><h4>No video</h4><p>Voice or text only.</p></div>
+  </section>
+
+  <section class="section">
+    <h2>What people use it for</h2>
+    <div class="quotes">
+      <blockquote>“Met someone from across the world and we beat Connect 4 three times. Wild.” <cite>— a night owl</cite></blockquote>
+      <blockquote>“Great for practicing a new language with real voices.” <cite>— a learner</cite></blockquote>
+      <blockquote>“No sign-up, no camera. I just press start when I'm bored.” <cite>— a regular</cite></blockquote>
+    </div>
+  </section>
+
+  <section id="faq" class="section">
+    <h2>Questions</h2>
+    <div class="faq">
+      <details><summary>Do I need an account?</summary><p>No. You're a guest the moment you press start — no email, no password, no profile.</p></details>
+      <details><summary>Is it really anonymous?</summary><p>Yes. You're never asked for your name. Voice and game data go directly between you and your partner (peer-to-peer); the server only helps you find each other.</p></details>
+      <details><summary>Is anything recorded?</summary><p>No. There's no recording or chat history. When the chat ends, it's gone for good.</p></details>
+      <details><summary>Do I need a webcam?</summary><p>Never. This is voice and text only — no video, ever.</p></details>
+      <details><summary>What if someone's rude?</summary><p>Hit Skip to instantly move on, or Report to flag them and move on at the same time.</p></details>
+      <details><summary>How many can be in a room?</summary><p>Public rooms hold up to 5 people so the audio stays clear.</p></details>
+    </div>
+  </section>
+
+  <section class="section final-cta">
+    <h2>Ready to meet someone?</h2>
+    <div class="hero-cta">
+      <button class="btn-primary big" data-start="voice">🎤 Start a voice chat</button>
+      <button class="btn-ghost big" data-start="text">💬 Start a text chat</button>
+    </div>
+  </section>
+
+  <footer class="site-footer">
+    <div class="foot-tag">No camera. No login. Just conversation.</div>
+    <div class="foot-rooms">
+      <button class="foot-room" data-room="lounge">🛋️ Lounge <span class="count" data-room="lounge">0</span></button>
+      <button class="foot-room" data-room="chill">🌙 Chill <span class="count" data-room="chill">0</span></button>
+    </div>
+    <div class="foot-fine">anon.voice · be kind out there · 18+</div>
+  </footer>
+</div>
+
+<!-- ===================== APP ===================== -->
+<main id="app" class="app-hidden">
+  <div class="app-bar">
+    <button id="go-home" class="iconbtn" title="Home" aria-label="Back to home">←</button>
+    <div id="self-identity" class="self-identity"></div>
+    <div class="app-bar-spacer"></div>
+  </div>
 
   <section class="orb-wrap">
     <div id="orb" class="orb idle"></div>
-    <p id="status" class="status" role="status" aria-live="polite">Pick a mode to begin.</p>
+    <p id="status" class="status" role="status" aria-live="polite">Connecting…</p>
   </section>
 
   <section class="controls">
-    <button id="toggle" class="primary">🎲 Random stranger</button>
-    <button id="join-lounge" class="primary">🛋️ Lounge <span class="count" data-room="lounge">0</span></button>
-    <button id="join-chill" class="primary">🌙 Chill <span class="count" data-room="chill">0</span></button>
-    <button id="mute" class="hidden" disabled>Mute</button>
-    <button id="skip" class="hidden" disabled>Skip</button>
+    <button id="skip" class="primary" disabled>Skip</button>
+    <button id="mute" disabled>Mute</button>
+    <button id="report" class="ghost" disabled>Report</button>
+    <button id="leave" class="danger">Leave</button>
   </section>
 
-  <div id="participants" class="participants hidden" aria-label="Participants"></div>
-
   <section id="chat" class="chat hidden">
+    <div id="participants" class="participants hidden" aria-label="Participants"></div>
     <div class="tabs">
       <button class="tab active" data-tab="chat" title="Chat" aria-label="Chat" data-label="Chat">💬</button>
       <button class="tab" data-tab="mines" title="Minesweeper" aria-label="Minesweeper" data-label="Mines">💣</button>
@@ -110,15 +214,14 @@
     </div>
   </section>
 
-  <footer>
-    <p>Be kind. Audio is peer-to-peer; nothing is recorded.</p>
-  </footer>
-
   <audio id="remote-audio" autoplay playsinline></audio>
   <div id="peer-audios" aria-hidden="true"></div>
 </main>
+
 <div class="watermark">AG</div>
+
 <script src="/socket.io/socket.io.js"></script>
+<script src="identity.js"></script>
 <script src="minesweeper.js"></script>
 <script src="sudoku.js"></script>
 <script src="connect4.js"></script>

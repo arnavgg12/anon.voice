@@ -9,12 +9,14 @@ app.use(express.static(path.join(__dirname, 'public')));
 const server = http.createServer(app);
 const io = new Server(server);
 
-let waiting = null;
+// Separate waiting slots per mode so text users match text, voice match voice.
+const waiting = { voice: null, text: null };
 const partners = new Map();
 const ROOMS = new Set(['lounge', 'chill']);
 const ROOM_CAP = 5;
 const SKIP_COOLDOWN_MS = 3000;
 const lastFindPartner = new Map();
+let reportCount = 0;
 
 function cleanupPartner(socket) {
   const partnerId = partners.get(socket.id);
@@ -24,7 +26,9 @@ function cleanupPartner(socket) {
     const partner = io.sockets.sockets.get(partnerId);
     if (partner) partner.emit('partner-left');
   }
-  if (waiting && waiting.id === socket.id) waiting = null;
+  for (const q of Object.keys(waiting)) {
+    if (waiting[q] && waiting[q].id === socket.id) waiting[q] = null;
+  }
 }
 
 function leaveRoom(socket) {
@@ -49,11 +53,18 @@ function broadcastLobbyCounts() {
   io.emit('lobby-counts', getLobbyCounts());
 }
 
+function broadcastOnline() {
+  io.emit('online', { count: io.engine.clientsCount });
+}
+
 io.on('connection', (socket) => {
   // Send current lobby counts to the newly-connected client
   socket.emit('lobby-counts', getLobbyCounts());
+  socket.emit('online', { count: io.engine.clientsCount });
+  broadcastOnline();
 
-  socket.on('find-partner', () => {
+  socket.on('find-partner', (opts) => {
+    const mode = opts && opts.mode === 'text' ? 'text' : 'voice';
     const last = lastFindPartner.get(socket.id) || 0;
     const wait = SKIP_COOLDOWN_MS - (Date.now() - last);
     if (wait > 0) {
@@ -64,17 +75,25 @@ io.on('connection', (socket) => {
     cleanupPartner(socket);
     leaveRoom(socket);
 
-    if (waiting && waiting.id !== socket.id && waiting.connected) {
-      const partner = waiting;
-      waiting = null;
+    const slot = waiting[mode];
+    if (slot && slot.id !== socket.id && slot.connected) {
+      const partner = slot;
+      waiting[mode] = null;
       partners.set(socket.id, partner.id);
       partners.set(partner.id, socket.id);
-      socket.emit('matched', { initiator: true });
-      partner.emit('matched', { initiator: false });
+      socket.emit('matched', { initiator: true, peerId: partner.id, mode });
+      partner.emit('matched', { initiator: false, peerId: socket.id, mode });
     } else {
-      waiting = socket;
-      socket.emit('waiting');
+      waiting[mode] = socket;
+      socket.emit('waiting', { mode });
     }
+  });
+
+  socket.on('report', () => {
+    reportCount++;
+    const partnerId = partners.get(socket.id);
+    console.log(`[report] ${socket.id} reported ${partnerId || '(room/none)'} — total ${reportCount}`);
+    // No moderation backend in this MVP; we log and let the client skip.
   });
 
   socket.on('signal', (data) => {
@@ -120,6 +139,7 @@ io.on('connection', (socket) => {
     cleanupPartner(socket);
     leaveRoom(socket);
     lastFindPartner.delete(socket.id);
+    broadcastOnline();
   });
 });
 

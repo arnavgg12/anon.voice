@@ -1,10 +1,19 @@
 const socket = io();
 
-const toggleBtn = document.getElementById('toggle');
-const loungeBtn = document.getElementById('join-lounge');
-const chillBtn = document.getElementById('join-chill');
-const muteBtn = document.getElementById('mute');
+// ---- Landing / app navigation ----
+const landingEl = document.getElementById('landing');
+const appEl = document.getElementById('app');
+const goHomeBtn = document.getElementById('go-home');
+const selfIdentityEl = document.getElementById('self-identity');
+const heroOnlineEl = document.getElementById('hero-online');
+
+// ---- Controls ----
 const skipBtn = document.getElementById('skip');
+const muteBtn = document.getElementById('mute');
+const reportBtn = document.getElementById('report');
+const leaveBtn = document.getElementById('leave');
+
+// ---- Chat / rooms ----
 const peerAudiosEl = document.getElementById('peer-audios');
 const participantsEl = document.getElementById('participants');
 const chatEl = document.getElementById('chat');
@@ -12,6 +21,8 @@ const messagesEl = document.getElementById('messages');
 const chatForm = document.getElementById('chat-form');
 const chatInput = document.getElementById('chat-input');
 const chatSend = document.getElementById('chat-send');
+
+// ---- Games ----
 const tabs = document.querySelectorAll('.tab');
 const panels = document.querySelectorAll('.tab-panel');
 const boardEl = document.getElementById('board');
@@ -51,68 +62,82 @@ let sudokuState = null;
 let c4State = null;
 let tttState = null;
 let dbState = null;
-let mode = 'idle'; // 'idle' | 'random' | 'room'
+let mode = 'idle';        // 'idle' | 'random' | 'room'
+let textOnly = false;     // random text-only chat (no mic)
 let currentRoom = null;
-const roomPeers = new Map(); // peerId -> RTCPeerConnection
+let partnerIdentity = null;
+const roomPeers = new Map();
 let drawApi = null;
-const participants = new Map(); // peerId -> { color, speaking, analyser, data }
+const participants = new Map();
 let selfAnalyser = null;
 let selfData = null;
 let sharedAudioCtx = null;
 let activityRafId = null;
 
-function colorForId(id) {
-  let hash = 0;
-  for (const ch of String(id || '')) hash = (hash * 31 + ch.charCodeAt(0)) | 0;
-  return `hsl(${Math.abs(hash) % 360}, 70%, 65%)`;
+// ---------- profanity filter ----------
+const BAD_WORDS = ['fuck','shit','bitch','asshole','bastard','cunt','dick','slut','whore','nigger','faggot','retard'];
+const badRe = new RegExp('\\b(' + BAD_WORDS.join('|') + ')\\b', 'gi');
+function clean(text) {
+  return String(text).replace(badRe, (m) => '*'.repeat(m.length));
 }
 
-function shortId(id) {
-  return String(id || '????').slice(0, 4);
+// ---------- identity ----------
+function selfIdentity() {
+  return Identity.identityForId(socket.id || 'me');
 }
+
+function showSelfIdentity() {
+  const me = selfIdentity();
+  selfIdentityEl.innerHTML = '';
+  const av = document.createElement('span');
+  av.className = 'id-avatar';
+  av.textContent = me.emoji;
+  av.style.background = me.color;
+  const name = document.createElement('span');
+  name.textContent = 'You are ' + me.name;
+  selfIdentityEl.appendChild(av);
+  selfIdentityEl.appendChild(name);
+}
+
+function colorForId(id) { return Identity.identityForId(id).color; }
 
 function setStatus(text, orbState) {
   statusEl.textContent = text;
   if (orbState) orbEl.className = 'orb ' + orbState;
 }
 
-function setActive(active, activeMode = 'random') {
-  const tabsEl = document.querySelector('.tabs');
-  if (active) {
-    toggleBtn.textContent = activeMode === 'room' ? `Leave ${currentRoom}` : 'Stop';
-    toggleBtn.classList.remove('primary');
-    toggleBtn.classList.add('danger');
-    loungeBtn.classList.add('hidden');
-    chillBtn.classList.add('hidden');
-    muteBtn.classList.remove('hidden');
-    muteBtn.disabled = false;
-    if (activeMode === 'random') {
-      skipBtn.classList.remove('hidden');
-      skipBtn.disabled = false;
-      tabsEl.classList.remove('room-mode');
-    } else {
-      skipBtn.classList.add('hidden');
-      tabsEl.classList.add('room-mode');
-      switchTab('chat');
-      // Room mode: chat goes via server, enable immediately
-      chatInput.disabled = false;
-      chatSend.disabled = false;
-    }
-    chatEl.classList.remove('hidden');
-  } else {
-    toggleBtn.textContent = '🎲 Random stranger';
-    toggleBtn.classList.remove('danger');
-    toggleBtn.classList.add('primary');
-    loungeBtn.classList.remove('hidden');
-    chillBtn.classList.remove('hidden');
-    muteBtn.classList.add('hidden');
-    muteBtn.disabled = true;
-    skipBtn.classList.add('hidden');
-    skipBtn.disabled = true;
-    tabsEl.classList.remove('room-mode');
-    chatEl.classList.add('hidden');
-    clearChat();
-  }
+// ---------- navigation ----------
+function enterApp() {
+  landingEl.classList.add('app-hidden');
+  appEl.classList.remove('app-hidden');
+  showSelfIdentity();
+  window.scrollTo(0, 0);
+}
+
+function goHome() {
+  if (mode === 'room') leaveRoom(true);
+  else if (mode === 'random') stopCall(true);
+  appEl.classList.add('app-hidden');
+  landingEl.classList.remove('app-hidden');
+}
+
+// ---------- controls ----------
+function configureControls() {
+  const inRandom = mode === 'random';
+  const inRoom = mode === 'room';
+  // Skip — random only
+  skipBtn.classList.toggle('hidden', !inRandom);
+  skipBtn.disabled = !inRandom;
+  // Report — random only (1-on-1 has a single partner to report)
+  reportBtn.classList.toggle('hidden', !inRandom);
+  reportBtn.disabled = !inRandom;
+  // Mute — any voice mode (not text-only random)
+  const showMute = inRoom || (inRandom && !textOnly);
+  muteBtn.classList.toggle('hidden', !showMute);
+  muteBtn.disabled = !showMute;
+  // Tabs: hide games in room mode
+  document.querySelector('.tabs').classList.toggle('room-mode', inRoom);
+  chatEl.classList.remove('hidden');
 }
 
 function applyMute() {
@@ -123,13 +148,16 @@ function applyMute() {
   muteBtn.classList.toggle('muted', isMuted);
 }
 
+// ---------- chat rendering ----------
 function appendMessage(text, who) {
   const div = document.createElement('div');
   div.className = 'msg ' + who;
-  div.textContent = text;
+  div.textContent = clean(text);
   messagesEl.appendChild(div);
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
+
+function appendSystem(text) { appendMessage(text, 'system'); }
 
 function clearChat() {
   messagesEl.innerHTML = '';
@@ -155,7 +183,11 @@ function setupChatChannel(channel) {
     tttNewBtn.disabled = false;
     dbNewBtn.disabled = false;
     drawClearBtn.disabled = false;
-    appendMessage('Connected. Say hi.', 'system');
+    if (partnerIdentity) {
+      appendSystem(`You're now talking with ${partnerIdentity.emoji} ${partnerIdentity.name}.`);
+    } else {
+      appendSystem('Connected. Say hi.');
+    }
   };
   channel.onmessage = (e) => {
     let msg;
@@ -209,7 +241,6 @@ function setupDrawingPanel() {
       sendOverChannel({ type: 'draw-seg', x1, y1, x2, y2, color, width });
     },
   });
-  // Build palette
   drawPaletteEl.innerHTML = '';
   const colors = [...Draw.COLORS, Draw.ERASER];
   colors.forEach((color, i) => {
@@ -233,9 +264,9 @@ drawClearBtn.addEventListener('click', () => {
   sendOverChannel({ type: 'draw-clear' });
 });
 
-// Initialize draw panel on DOM ready (canvas setup is cheap; no harm)
 setupDrawingPanel();
 
+// ---------- minesweeper ----------
 function renderGame() {
   if (!board) return;
   Minesweeper.renderBoard(board, boardEl, gameStatusEl, {
@@ -264,7 +295,6 @@ function startGame(seed, broadcast) {
 function switchTab(name) {
   tabs.forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
   panels.forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== name));
-  // Canvas needs correct backing-pixel size after becoming visible
   if (name === 'draw' && drawApi) {
     requestAnimationFrame(() => drawApi.redrawAll());
   }
@@ -437,18 +467,16 @@ function handleSudokuInput(value) {
 function startSudoku(seed, broadcast) {
   const { puzzle, solution, givens } = Sudoku.buildSudoku(seed);
   sudokuState = {
-    puzzle,
-    solution,
-    givens,
+    puzzle, solution, givens,
     filledBy: Array.from({ length: 9 }, () => Array(9).fill(null)),
-    selected: null,
-    seed,
+    selected: null, seed,
   };
   renderSudokuLocal();
   switchTab('sudoku');
   if (broadcast) sendOverChannel({ type: 'sudoku-start', seed });
 }
 
+// ---------- mic / peer ----------
 async function ensureMic() {
   if (localStream) return localStream;
   try {
@@ -462,10 +490,12 @@ async function ensureMic() {
   }
 }
 
-function createPeer(initiator) {
+function createPeer(initiator, withAudio) {
   pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
-  localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
+  if (withAudio && localStream) {
+    localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
+  }
 
   if (initiator) {
     setupChatChannel(pc.createDataChannel('chat'));
@@ -473,20 +503,17 @@ function createPeer(initiator) {
     pc.ondatachannel = (e) => setupChatChannel(e.channel);
   }
 
-  pc.ontrack = (e) => {
-    remoteAudio.srcObject = e.streams[0];
-  };
+  pc.ontrack = (e) => { remoteAudio.srcObject = e.streams[0]; };
 
   pc.onicecandidate = (e) => {
-    if (e.candidate) {
-      socket.emit('signal', { type: 'ice', candidate: e.candidate });
-    }
+    if (e.candidate) socket.emit('signal', { type: 'ice', candidate: e.candidate });
   };
 
   pc.onconnectionstatechange = () => {
     if (!pc) return;
     if (pc.connectionState === 'connected') {
-      setStatus('Connected — say hi.', 'live');
+      const partnerName = partnerIdentity ? `${partnerIdentity.emoji} ${partnerIdentity.name}` : 'a stranger';
+      setStatus(textOnly ? `Connected with ${partnerName} — start typing.` : `Connected with ${partnerName}.`, 'live');
     } else if (pc.connectionState === 'failed') {
       setStatus('Connection failed.', 'idle');
     }
@@ -498,53 +525,62 @@ function teardownPeer() {
     try { chatChannel.close(); } catch {}
     chatChannel = null;
   }
-  if (pc) {
-    pc.close();
-    pc = null;
-  }
+  if (pc) { pc.close(); pc = null; }
   remoteAudio.srcObject = null;
+  partnerIdentity = null;
   chatInput.disabled = true;
   chatSend.disabled = true;
 }
 
-async function startCall() {
-  try { await ensureMic(); } catch { return; }
-  setStatus('Looking for someone…', 'searching');
+// ---------- random (1-on-1) ----------
+async function startCall(asText) {
+  textOnly = !!asText;
   mode = 'random';
-  setActive(true, 'random');
-  socket.emit('find-partner');
+  enterApp();
+  if (!textOnly) {
+    try { await ensureMic(); } catch { goHome(); return; }
+  }
+  configureControls();
+  setStatus(textOnly ? 'Finding someone to text…' : 'Finding someone to talk to…', 'searching');
+  socket.emit('find-partner', { mode: textOnly ? 'text' : 'voice' });
 }
 
-function stopCall() {
-  if (mode === 'room') return leaveRoom();
+function stopCall(silent) {
   teardownPeer();
   socket.emit('leave');
   if (localStream) {
     localStream.getTracks().forEach((t) => t.stop());
     localStream = null;
   }
-  isMuted = false;
-  applyMute();
-  setStatus('Pick a mode to begin.', 'idle');
+  isMuted = false; applyMute();
   mode = 'idle';
-  setActive(false);
+  if (!silent) {
+    setStatus('Pick a mode to begin.', 'idle');
+    chatEl.classList.add('hidden');
+    clearChat();
+  }
 }
 
+// ---------- rooms ----------
 async function joinRoom(roomName) {
-  try { await ensureMic(); } catch { return; }
-  currentRoom = roomName;
   mode = 'room';
+  currentRoom = roomName;
+  enterApp();
+  try { await ensureMic(); } catch { goHome(); return; }
+  configureControls();
+  switchTab('chat');
+  chatInput.disabled = false;
+  chatSend.disabled = false;
   setStatus(`Joining ${roomName}…`, 'searching');
-  setActive(true, 'room');
   attachSelfAnalyser();
   startActivityLoop();
   renderParticipants();
   socket.emit('join-room', { room: roomName });
 }
 
-function leaveRoom() {
+function leaveRoom(silent) {
   socket.emit('leave');
-  for (const [, pc] of roomPeers) pc.close();
+  for (const [, p] of roomPeers) p.close();
   roomPeers.clear();
   participants.clear();
   peerAudiosEl.innerHTML = '';
@@ -556,35 +592,35 @@ function leaveRoom() {
     localStream = null;
   }
   selfAnalyser = null; selfData = null;
-  isMuted = false;
-  applyMute();
-  setStatus('Pick a mode to begin.', 'idle');
+  isMuted = false; applyMute();
   currentRoom = null;
   mode = 'idle';
-  setActive(false);
+  if (!silent) {
+    setStatus('Pick a mode to begin.', 'idle');
+    chatEl.classList.add('hidden');
+    clearChat();
+  }
 }
 
 function makeChip(id, isMe) {
-  const color = colorForId(id);
+  const idn = Identity.identityForId(id);
   const chip = document.createElement('span');
   chip.className = 'chip' + (isMe ? ' me' : '');
   chip.dataset.pid = id;
-  chip.style.setProperty('--chip-color', color);
+  chip.style.setProperty('--chip-color', idn.color);
   const dot = document.createElement('span');
   dot.className = 'chip-dot';
+  dot.textContent = idn.emoji;
   const label = document.createElement('span');
   label.className = 'chip-label';
-  label.textContent = isMe ? 'you' : shortId(id);
+  label.textContent = isMe ? 'you' : idn.name;
   chip.appendChild(dot);
   chip.appendChild(label);
   return chip;
 }
 
 function renderParticipants() {
-  if (mode !== 'room') {
-    participantsEl.classList.add('hidden');
-    return;
-  }
+  if (mode !== 'room') { participantsEl.classList.add('hidden'); return; }
   participantsEl.classList.remove('hidden');
   participantsEl.innerHTML = '';
   participantsEl.appendChild(makeChip(socket.id || 'me', true));
@@ -615,10 +651,7 @@ function attachPeerAnalyser(peerId, stream) {
   analyser.fftSize = 512;
   src.connect(analyser);
   const p = participants.get(peerId);
-  if (p) {
-    p.analyser = analyser;
-    p.data = new Uint8Array(analyser.frequencyBinCount);
-  }
+  if (p) { p.analyser = analyser; p.data = new Uint8Array(analyser.frequencyBinCount); }
 }
 
 function avgLevel(data, analyser) {
@@ -638,10 +671,8 @@ function activityTick() {
     if (!el) return;
     if (on !== el.classList.contains('speaking')) el.classList.toggle('speaking', on);
   };
-  // Self
   const selfLvl = avgLevel(selfData, selfAnalyser);
   setSpeaking('.chip.me', selfLvl > SPEAKING_THRESHOLD && !isMuted);
-  // Peers
   for (const [pid, p] of participants) {
     const lvl = avgLevel(p.data, p.analyser);
     p.speaking = lvl > SPEAKING_THRESHOLD;
@@ -650,19 +681,12 @@ function activityTick() {
   activityRafId = requestAnimationFrame(activityTick);
 }
 
-function startActivityLoop() {
-  if (activityRafId) return;
-  activityRafId = requestAnimationFrame(activityTick);
-}
-
-function stopActivityLoop() {
-  if (activityRafId) cancelAnimationFrame(activityRafId);
-  activityRafId = null;
-}
+function startActivityLoop() { if (!activityRafId) activityRafId = requestAnimationFrame(activityTick); }
+function stopActivityLoop() { if (activityRafId) cancelAnimationFrame(activityRafId); activityRafId = null; }
 
 function createRoomPeer(peerId, initiator) {
   const peerPc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-  localStream.getTracks().forEach((t) => peerPc.addTrack(t, localStream));
+  if (localStream) localStream.getTracks().forEach((t) => peerPc.addTrack(t, localStream));
   if (!participants.has(peerId)) {
     participants.set(peerId, { color: colorForId(peerId), speaking: false });
   }
@@ -680,9 +704,7 @@ function createRoomPeer(peerId, initiator) {
     attachPeerAnalyser(peerId, e.streams[0]);
   };
   peerPc.onicecandidate = (e) => {
-    if (e.candidate) {
-      socket.emit('room-signal', { to: peerId, type: 'ice', candidate: e.candidate });
-    }
+    if (e.candidate) socket.emit('room-signal', { to: peerId, type: 'ice', candidate: e.candidate });
   };
   roomPeers.set(peerId, peerPc);
   if (initiator) {
@@ -705,20 +727,15 @@ function removeRoomPeer(peerId) {
 
 socket.on('room-joined', ({ room, peers }) => {
   setStatus(`In ${room} — ${peers.length + 1} here. Say hi.`, 'live');
-  // Existing peers will initiate offers to me; I just need to be ready.
-  // We pre-create RTCPeerConnections for each existing peer in non-initiator mode.
   for (const peerId of peers) createRoomPeer(peerId, false);
 });
 
 socket.on('peer-joined', ({ peerId }) => {
-  // Someone new arrived — I'm an existing peer, so I send the offer.
   if (mode !== 'room') return;
   createRoomPeer(peerId, true);
 });
 
-socket.on('peer-left', ({ peerId }) => {
-  removeRoomPeer(peerId);
-});
+socket.on('peer-left', ({ peerId }) => { removeRoomPeer(peerId); });
 
 socket.on('room-count', ({ count }) => {
   if (mode === 'room' && currentRoom) {
@@ -741,20 +758,20 @@ socket.on('room-signal', async ({ from, type, sdp, candidate }) => {
     } else if (type === 'ice') {
       await peerPc.addIceCandidate(new RTCIceCandidate(candidate));
     }
-  } catch (err) {
-    console.warn('Room signal error:', err);
-  }
+  } catch (err) { console.warn('Room signal error:', err); }
 });
 
 socket.on('room-text', ({ from, text }) => {
+  const idn = Identity.identityForId(from);
   const div = document.createElement('div');
   div.className = 'msg them';
   const sender = document.createElement('span');
   sender.className = 'msg-sender';
-  sender.style.color = colorForId(from);
-  sender.textContent = shortId(from);
+  sender.style.color = idn.color;
+  sender.textContent = idn.emoji + ' ' + idn.name;
   div.appendChild(sender);
-  div.appendChild(document.createTextNode(text));
+  div.appendChild(document.createElement('br'));
+  div.appendChild(document.createTextNode(clean(text)));
   messagesEl.appendChild(div);
   messagesEl.scrollTop = messagesEl.scrollHeight;
 });
@@ -765,26 +782,26 @@ socket.on('lobby-counts', (counts) => {
   });
 });
 
+socket.on('online', ({ count }) => {
+  if (heroOnlineEl) heroOnlineEl.textContent = count;
+});
+
 socket.on('room-full', ({ room, cap }) => {
   setStatus(`${room} is full (${cap} max). Try again later.`, 'idle');
-  // Reset to idle if we were trying to join
-  if (mode === 'room') {
-    leaveRoom();
-  }
+  if (mode === 'room') leaveRoom();
 });
 
 socket.on('skip-cooldown', ({ ms }) => {
   const sec = Math.ceil(ms / 1000);
-  setStatus(`Slow down — try again in ${sec}s.`, 'idle');
-  // Re-enable Skip after the cooldown
-  if (skipBtn) {
-    skipBtn.disabled = true;
-    setTimeout(() => { if (mode === 'random') skipBtn.disabled = false; }, ms);
-  }
+  setStatus(`Slow down — try again in ${sec}s.`, 'searching');
+  skipBtn.disabled = true;
+  setTimeout(() => { if (mode === 'random') skipBtn.disabled = false; }, ms);
 });
 
-async function handleMatch({ initiator }) {
-  createPeer(initiator);
+async function handleMatch({ initiator, peerId, mode: matchedMode }) {
+  partnerIdentity = peerId ? Identity.identityForId(peerId) : null;
+  const withAudio = matchedMode !== 'text';
+  createPeer(initiator, withAudio);
   if (initiator) {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
@@ -806,40 +823,47 @@ async function handleSignal(data) {
     } else if (data.type === 'ice') {
       await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
     }
-  } catch (err) {
-    console.warn('Signal error:', err);
-  }
+  } catch (err) { console.warn('Signal error:', err); }
 }
 
-socket.on('waiting', () => setStatus('Waiting for a stranger…', 'searching'));
+socket.on('waiting', () => setStatus(textOnly ? 'Waiting for someone to text…' : 'Waiting for a stranger…', 'searching'));
 socket.on('matched', handleMatch);
 socket.on('signal', handleSignal);
 socket.on('partner-left', () => {
   teardownPeer();
   clearChat();
   setStatus('They left. Finding someone new…', 'searching');
-  socket.emit('find-partner');
+  socket.emit('find-partner', { mode: textOnly ? 'text' : 'voice' });
 });
 
-toggleBtn.addEventListener('click', () => {
-  if (mode === 'room') leaveRoom();
-  else if (localStream) stopCall();
-  else startCall();
+// ---------- landing / control wiring ----------
+document.querySelectorAll('[data-start]').forEach((btn) => {
+  btn.addEventListener('click', () => startCall(btn.dataset.start === 'text'));
+});
+document.querySelectorAll('[data-room]').forEach((btn) => {
+  if (btn.tagName === 'BUTTON') btn.addEventListener('click', () => joinRoom(btn.dataset.room));
 });
 
-loungeBtn.addEventListener('click', () => joinRoom('lounge'));
-chillBtn.addEventListener('click', () => joinRoom('chill'));
+goHomeBtn.addEventListener('click', goHome);
+leaveBtn.addEventListener('click', goHome);
 
-muteBtn.addEventListener('click', () => {
-  isMuted = !isMuted;
-  applyMute();
-});
+muteBtn.addEventListener('click', () => { isMuted = !isMuted; applyMute(); });
 
 skipBtn.addEventListener('click', () => {
+  if (mode !== 'random') return;
   teardownPeer();
   clearChat();
   setStatus('Finding someone new…', 'searching');
-  socket.emit('find-partner');
+  socket.emit('find-partner', { mode: textOnly ? 'text' : 'voice' });
+});
+
+reportBtn.addEventListener('click', () => {
+  if (mode !== 'random') return;
+  socket.emit('report');
+  teardownPeer();
+  clearChat();
+  setStatus('Reported. Finding someone new…', 'searching');
+  socket.emit('find-partner', { mode: textOnly ? 'text' : 'voice' });
 });
 
 chatForm.addEventListener('submit', (e) => {
@@ -857,41 +881,31 @@ chatForm.addEventListener('submit', (e) => {
   chatInput.value = '';
 });
 
-tabs.forEach((tab) => {
-  tab.addEventListener('click', () => switchTab(tab.dataset.tab));
-});
+tabs.forEach((tab) => tab.addEventListener('click', () => switchTab(tab.dataset.tab)));
 
 gameNewBtn.addEventListener('click', () => {
   if (!chatChannel || chatChannel.readyState !== 'open') return;
-  const seed = (Math.random() * 0x7fffffff) | 0;
-  startGame(seed, true);
+  startGame((Math.random() * 0x7fffffff) | 0, true);
 });
-
 sudokuNewBtn.addEventListener('click', () => {
   if (!chatChannel || chatChannel.readyState !== 'open') return;
-  const seed = (Math.random() * 0x7fffffff) | 0;
-  startSudoku(seed, true);
+  startSudoku((Math.random() * 0x7fffffff) | 0, true);
 });
-
 c4NewBtn.addEventListener('click', () => {
   if (!chatChannel || chatChannel.readyState !== 'open') return;
   startConnect4(true);
 });
-
 tttNewBtn.addEventListener('click', () => {
   if (!chatChannel || chatChannel.readyState !== 'open') return;
   startTTT(true);
 });
-
 dbNewBtn.addEventListener('click', () => {
   if (!chatChannel || chatChannel.readyState !== 'open') return;
   startDotsBoxes(true);
 });
 
 sudokuPadBtns.forEach((btn) => {
-  btn.addEventListener('click', () => {
-    handleSudokuInput(parseInt(btn.dataset.value, 10) || 0);
-  });
+  btn.addEventListener('click', () => handleSudokuInput(parseInt(btn.dataset.value, 10) || 0));
 });
 
 document.addEventListener('keydown', (e) => {
@@ -901,11 +915,9 @@ document.addEventListener('keydown', (e) => {
 
   if (activeTab === 'sudoku' && sudokuState) {
     if (e.key >= '1' && e.key <= '9') {
-      handleSudokuInput(parseInt(e.key, 10));
-      e.preventDefault();
+      handleSudokuInput(parseInt(e.key, 10)); e.preventDefault();
     } else if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') {
-      handleSudokuInput(0);
-      e.preventDefault();
+      handleSudokuInput(0); e.preventDefault();
     } else if (e.key.startsWith('Arrow')) {
       if (sudokuState.selected === null) sudokuState.selected = 40;
       else {
@@ -917,8 +929,7 @@ document.addEventListener('keydown', (e) => {
         if (e.key === 'ArrowRight' && j < 8) nj++;
         sudokuState.selected = ni * 9 + nj;
       }
-      renderSudokuLocal();
-      e.preventDefault();
+      renderSudokuLocal(); e.preventDefault();
     }
   } else if (activeTab === 'c4' && c4State && !c4State.winner) {
     if (e.key >= '1' && e.key <= '7' && c4State.currentPlayer === c4State.myPlayer) {
@@ -929,12 +940,8 @@ document.addEventListener('keydown', (e) => {
   } else if (activeTab === 'ttt' && tttState && !tttState.winner) {
     if (e.key >= '1' && e.key <= '9' && tttState.currentPlayer === tttState.myPlayer) {
       const idx = parseInt(e.key, 10) - 1;
-      if (tttState.board[idx] === 0 && doTTTMove(idx)) {
-        sendOverChannel({ type: 'ttt-move', idx });
-      }
+      if (tttState.board[idx] === 0 && doTTTMove(idx)) sendOverChannel({ type: 'ttt-move', idx });
       e.preventDefault();
     }
   }
 });
-
-setActive(false);
