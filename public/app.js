@@ -12,6 +12,16 @@ const skipBtn = document.getElementById('skip');
 const muteBtn = document.getElementById('mute');
 const reportBtn = document.getElementById('report');
 const leaveBtn = document.getElementById('leave');
+const addFriendBtn = document.getElementById('add-friend');
+
+// ---- Friends ----
+const friendsSectionEl = document.getElementById('friends-section');
+const friendsListEl = document.getElementById('friends-list');
+const callModalEl = document.getElementById('call-modal');
+const callModalText = document.getElementById('call-modal-text');
+const callModalEmoji = document.getElementById('call-modal-emoji');
+const callAcceptBtn = document.getElementById('call-accept');
+const callDeclineBtn = document.getElementById('call-decline');
 
 // ---- Chat / rooms ----
 const peerAudiosEl = document.getElementById('peer-audios');
@@ -66,6 +76,22 @@ let mode = 'idle';        // 'idle' | 'random' | 'room'
 let textOnly = false;     // random text-only chat (no mic)
 let currentRoom = null;
 let partnerIdentity = null;
+let partnerGuestId = null;
+let iSentFriendReq = false;
+let peerSentFriendReq = false;
+let pendingCallTo = null;     // guestId we're ringing
+let incomingCall = null;      // { fromSocket, mode, idn }
+const onlineFriends = new Set();
+
+// Persistent anonymous identity for this browser (enables friends w/o login)
+let guestId = null;
+try { guestId = localStorage.getItem('anonvoice_guest_id'); } catch {}
+if (!guestId) {
+  guestId = (window.crypto && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : 'g' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  try { localStorage.setItem('anonvoice_guest_id', guestId); } catch {}
+}
 const roomPeers = new Map();
 let drawApi = null;
 const participants = new Map();
@@ -83,7 +109,7 @@ function clean(text) {
 
 // ---------- identity ----------
 function selfIdentity() {
-  return Identity.identityForId(socket.id || 'me');
+  return Identity.identityForId(guestId);
 }
 
 function showSelfIdentity() {
@@ -100,6 +126,124 @@ function showSelfIdentity() {
 }
 
 function colorForId(id) { return Identity.identityForId(id).color; }
+
+// ---------- friends (localStorage) ----------
+function loadFriends() {
+  try { return JSON.parse(localStorage.getItem('anonvoice_friends') || '[]'); }
+  catch { return []; }
+}
+function saveFriends(list) {
+  try { localStorage.setItem('anonvoice_friends', JSON.stringify(list)); } catch {}
+}
+function addFriendRecord(id, name, emoji) {
+  if (!id) return;
+  const list = loadFriends();
+  if (!list.some((f) => f.id === id)) {
+    list.push({ id, name, emoji });
+    saveFriends(list);
+    socket.emit('watch-friends', { ids: [id] });
+  }
+  renderFriends();
+}
+function removeFriend(id) {
+  saveFriends(loadFriends().filter((f) => f.id !== id));
+  renderFriends();
+}
+
+function renderFriends() {
+  const friends = loadFriends();
+  if (!friends.length) { friendsSectionEl.classList.add('hidden'); return; }
+  friendsSectionEl.classList.remove('hidden');
+  friendsListEl.innerHTML = '';
+  friends.forEach((f) => {
+    const on = onlineFriends.has(f.id);
+    const row = document.createElement('div');
+    row.className = 'friend' + (on ? ' online' : '');
+
+    const av = document.createElement('span');
+    av.className = 'friend-av';
+    av.style.background = Identity.identityForId(f.id).color;
+    av.textContent = f.emoji;
+
+    const name = document.createElement('span');
+    name.className = 'friend-name';
+    name.textContent = f.name;
+
+    const status = document.createElement('span');
+    status.className = 'friend-status';
+    status.textContent = on ? 'online' : 'offline';
+
+    const spacer = document.createElement('span');
+    spacer.className = 'friend-spacer';
+
+    const callV = document.createElement('button');
+    callV.className = 'friend-call btn-primary';
+    callV.textContent = '🎤';
+    callV.title = on ? 'Voice call' : 'Offline';
+    callV.disabled = !on;
+    callV.addEventListener('click', () => callFriend(f, 'voice'));
+
+    const callT = document.createElement('button');
+    callT.className = 'friend-call btn-ghost';
+    callT.textContent = '💬';
+    callT.title = on ? 'Text chat' : 'Offline';
+    callT.disabled = !on;
+    callT.addEventListener('click', () => callFriend(f, 'text'));
+
+    const rm = document.createElement('button');
+    rm.className = 'friend-remove';
+    rm.textContent = '✕';
+    rm.title = 'Remove friend';
+    rm.addEventListener('click', () => removeFriend(f.id));
+
+    row.append(av, name, status, spacer, callV, callT, rm);
+    friendsListEl.appendChild(row);
+  });
+}
+
+function registerPresence() {
+  socket.emit('register', { guestId });
+  const ids = loadFriends().map((f) => f.id);
+  if (ids.length) socket.emit('watch-friends', { ids });
+  renderFriends();
+}
+
+function resetFriendButton() {
+  iSentFriendReq = false;
+  peerSentFriendReq = false;
+  partnerGuestId = null;
+  addFriendBtn.textContent = '＋ Add friend';
+  addFriendBtn.classList.remove('added');
+  addFriendBtn.disabled = true;
+}
+
+function maybeMutualFriend() {
+  if (iSentFriendReq && peerSentFriendReq && partnerGuestId && partnerIdentity) {
+    addFriendRecord(partnerGuestId, partnerIdentity.name, partnerIdentity.emoji);
+    addFriendBtn.textContent = '✓ Friends';
+    addFriendBtn.classList.add('added');
+    addFriendBtn.disabled = true;
+    appendSystem(`You're now friends with ${partnerIdentity.emoji} ${partnerIdentity.name}. Find each other from the home screen.`);
+  }
+}
+
+async function callFriend(friend, m) {
+  textOnly = m === 'text';
+  mode = 'random';
+  pendingCallTo = friend.id;
+  enterApp();
+  if (!textOnly) { try { await ensureMic(); } catch { goHome(); return; } }
+  configureControls();
+  partnerGuestId = friend.id;
+  partnerIdentity = Identity.identityForId(friend.id);
+  setStatus(`Calling ${friend.emoji} ${friend.name}…`, 'searching');
+  socket.emit('call-friend', { toGuestId: friend.id, mode: m });
+}
+
+function closeCallModal() {
+  callModalEl.classList.add('hidden');
+  incomingCall = null;
+}
 
 function setStatus(text, orbState) {
   statusEl.textContent = text;
@@ -135,6 +279,8 @@ function configureControls() {
   const showMute = inRoom || (inRandom && !textOnly);
   muteBtn.classList.toggle('hidden', !showMute);
   muteBtn.disabled = !showMute;
+  // Add friend — random (1-on-1) only; enabled once the channel + hello arrive
+  addFriendBtn.classList.toggle('hidden', !inRandom);
   // Tabs: hide games in room mode
   document.querySelector('.tabs').classList.toggle('room-mode', inRoom);
   chatEl.classList.remove('hidden');
@@ -183,6 +329,9 @@ function setupChatChannel(channel) {
     tttNewBtn.disabled = false;
     dbNewBtn.disabled = false;
     drawClearBtn.disabled = false;
+    addFriendBtn.disabled = false;
+    // Exchange persistent identity so the displayed name is stable for friends
+    sendOverChannel({ type: 'hello', guestId });
     if (partnerIdentity) {
       appendSystem(`You're now talking with ${partnerIdentity.emoji} ${partnerIdentity.name}.`);
     } else {
@@ -192,7 +341,24 @@ function setupChatChannel(channel) {
   channel.onmessage = (e) => {
     let msg;
     try { msg = JSON.parse(e.data); } catch { msg = { type: 'chat', text: e.data }; }
-    if (msg.type === 'chat') {
+    if (msg.type === 'hello') {
+      if (msg.guestId) {
+        partnerGuestId = msg.guestId;
+        partnerIdentity = Identity.identityForId(msg.guestId);
+        const known = loadFriends().some((f) => f.id === partnerGuestId);
+        if (known) {
+          addFriendBtn.textContent = '✓ Friends';
+          addFriendBtn.classList.add('added');
+          addFriendBtn.disabled = true;
+        }
+      }
+    } else if (msg.type === 'friend-add') {
+      peerSentFriendReq = true;
+      if (!iSentFriendReq && partnerIdentity) {
+        appendSystem(`${partnerIdentity.emoji} ${partnerIdentity.name} wants to be friends — tap "Add friend" to connect.`);
+      }
+      maybeMutualFriend();
+    } else if (msg.type === 'chat') {
       appendMessage(msg.text, 'them');
     } else if (msg.type === 'game-start') {
       startGame(msg.seed, false);
@@ -528,6 +694,7 @@ function teardownPeer() {
   if (pc) { pc.close(); pc = null; }
   remoteAudio.srcObject = null;
   partnerIdentity = null;
+  resetFriendButton();
   chatInput.disabled = true;
   chatSend.disabled = true;
 }
@@ -786,6 +953,37 @@ socket.on('online', ({ count }) => {
   if (heroOnlineEl) heroOnlineEl.textContent = count;
 });
 
+// ---- friends / presence ----
+function doRegister() { registerPresence(); }
+if (socket.connected) doRegister();
+socket.on('connect', doRegister);
+
+socket.on('friends-presence', ({ online: ids }) => {
+  (ids || []).forEach((id) => onlineFriends.add(id));
+  renderFriends();
+});
+socket.on('friend-presence', ({ id, online: isOn }) => {
+  if (isOn) onlineFriends.add(id); else onlineFriends.delete(id);
+  renderFriends();
+});
+
+socket.on('friend-call', ({ fromGuestId, fromSocket, mode: m }) => {
+  const idn = Identity.identityForId(fromGuestId || fromSocket);
+  incomingCall = { fromSocket, mode: m, idn };
+  callModalEmoji.textContent = idn.emoji;
+  callModalText.textContent = `${idn.name} wants to ${m === 'text' ? 'text you' : 'talk'}.`;
+  callModalEl.classList.remove('hidden');
+});
+socket.on('friend-call-cancelled', closeCallModal);
+socket.on('friend-unavailable', () => {
+  pendingCallTo = null;
+  setStatus('They’re offline right now.', 'idle');
+});
+socket.on('friend-declined', () => {
+  pendingCallTo = null;
+  setStatus('Call declined.', 'idle');
+});
+
 socket.on('room-full', ({ room, cap }) => {
   setStatus(`${room} is full (${cap} max). Try again later.`, 'idle');
   if (mode === 'room') leaveRoom();
@@ -799,7 +997,9 @@ socket.on('skip-cooldown', ({ ms }) => {
 });
 
 async function handleMatch({ initiator, peerId, mode: matchedMode }) {
-  partnerIdentity = peerId ? Identity.identityForId(peerId) : null;
+  pendingCallTo = null;
+  // partnerIdentity may already be set (friend call); else placeholder from socket id
+  if (!partnerIdentity && peerId) partnerIdentity = Identity.identityForId(peerId);
   const withAudio = matchedMode !== 'text';
   createPeer(initiator, withAudio);
   if (initiator) {
@@ -844,10 +1044,42 @@ document.querySelectorAll('[data-room]').forEach((btn) => {
   if (btn.tagName === 'BUTTON') btn.addEventListener('click', () => joinRoom(btn.dataset.room));
 });
 
-goHomeBtn.addEventListener('click', goHome);
-leaveBtn.addEventListener('click', goHome);
+goHomeBtn.addEventListener('click', () => { if (pendingCallTo) socket.emit('cancel-call', { toGuestId: pendingCallTo }); goHome(); });
+leaveBtn.addEventListener('click', () => { if (pendingCallTo) socket.emit('cancel-call', { toGuestId: pendingCallTo }); goHome(); });
 
 muteBtn.addEventListener('click', () => { isMuted = !isMuted; applyMute(); });
+
+addFriendBtn.addEventListener('click', () => {
+  if (mode !== 'random' || addFriendBtn.disabled) return;
+  iSentFriendReq = true;
+  sendOverChannel({ type: 'friend-add' });
+  if (peerSentFriendReq) {
+    maybeMutualFriend();
+  } else {
+    addFriendBtn.textContent = 'Requested…';
+    addFriendBtn.disabled = true;
+    appendSystem('Friend request sent — they need to tap "Add friend" too.');
+  }
+});
+
+callAcceptBtn.addEventListener('click', async () => {
+  if (!incomingCall) return;
+  const { fromSocket, mode: m, idn } = incomingCall;
+  closeCallModal();
+  textOnly = m === 'text';
+  mode = 'random';
+  enterApp();
+  if (!textOnly) { try { await ensureMic(); } catch { goHome(); return; } }
+  configureControls();
+  partnerIdentity = idn;
+  setStatus('Connecting…', 'searching');
+  socket.emit('call-response', { toSocket: fromSocket, accept: true, mode: m });
+});
+
+callDeclineBtn.addEventListener('click', () => {
+  if (incomingCall) socket.emit('call-response', { toSocket: incomingCall.fromSocket, accept: false, mode: incomingCall.mode });
+  closeCallModal();
+});
 
 skipBtn.addEventListener('click', () => {
   if (mode !== 'random') return;

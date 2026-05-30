@@ -18,6 +18,12 @@ const SKIP_COOLDOWN_MS = 3000;
 const lastFindPartner = new Map();
 let reportCount = 0;
 
+// Friends / presence (in-memory; friend lists themselves live in each client's
+// localStorage — the server only knows who is online right now).
+const online = new Map();       // guestId  -> socketId
+const socketGuest = new Map();  // socketId -> guestId
+const watchers = new Map();     // guestId  -> Set<socketId> (who wants presence updates)
+
 function cleanupPartner(socket) {
   const partnerId = partners.get(socket.id);
   if (partnerId) {
@@ -57,6 +63,21 @@ function broadcastOnline() {
   io.emit('online', { count: io.engine.clientsCount });
 }
 
+function notifyPresence(guestId, isOnline) {
+  const set = watchers.get(guestId);
+  if (!set) return;
+  for (const sid of set) io.to(sid).emit('friend-presence', { id: guestId, online: isOnline });
+}
+
+function pairSockets(aSock, bSock, mode) {
+  cleanupPartner(aSock); cleanupPartner(bSock);
+  leaveRoom(aSock); leaveRoom(bSock);
+  partners.set(aSock.id, bSock.id);
+  partners.set(bSock.id, aSock.id);
+  aSock.emit('matched', { initiator: true, peerId: bSock.id, mode });
+  bSock.emit('matched', { initiator: false, peerId: aSock.id, mode });
+}
+
 io.on('connection', (socket) => {
   // Send current lobby counts to the newly-connected client
   socket.emit('lobby-counts', getLobbyCounts());
@@ -94,6 +115,51 @@ io.on('connection', (socket) => {
     const partnerId = partners.get(socket.id);
     console.log(`[report] ${socket.id} reported ${partnerId || '(room/none)'} — total ${reportCount}`);
     // No moderation backend in this MVP; we log and let the client skip.
+  });
+
+  // ---- Friends / presence ----
+  socket.on('register', ({ guestId }) => {
+    if (typeof guestId !== 'string' || !guestId || guestId.length > 64) return;
+    socket.data.guestId = guestId;
+    online.set(guestId, socket.id);
+    socketGuest.set(socket.id, guestId);
+    notifyPresence(guestId, true);
+  });
+
+  socket.on('watch-friends', ({ ids }) => {
+    if (!Array.isArray(ids)) return;
+    if (!socket.data.watched) socket.data.watched = new Set();
+    const onlineNow = [];
+    for (const id of ids.slice(0, 200)) {
+      if (typeof id !== 'string') continue;
+      if (!watchers.has(id)) watchers.set(id, new Set());
+      watchers.get(id).add(socket.id);
+      socket.data.watched.add(id);
+      if (online.has(id)) onlineNow.push(id);
+    }
+    socket.emit('friends-presence', { online: onlineNow });
+  });
+
+  socket.on('call-friend', ({ toGuestId, mode }) => {
+    const targetSocketId = online.get(toGuestId);
+    if (!targetSocketId) { socket.emit('friend-unavailable', { toGuestId }); return; }
+    io.to(targetSocketId).emit('friend-call', {
+      fromGuestId: socket.data.guestId || null,
+      fromSocket: socket.id,
+      mode: mode === 'text' ? 'text' : 'voice',
+    });
+  });
+
+  socket.on('call-response', ({ toSocket, accept, mode }) => {
+    const caller = io.sockets.sockets.get(toSocket);
+    if (!caller) { socket.emit('friend-unavailable', {}); return; }
+    if (!accept) { caller.emit('friend-declined', {}); return; }
+    pairSockets(caller, socket, mode === 'text' ? 'text' : 'voice');
+  });
+
+  socket.on('cancel-call', ({ toGuestId }) => {
+    const t = online.get(toGuestId);
+    if (t) io.to(t).emit('friend-call-cancelled', {});
   });
 
   socket.on('signal', (data) => {
@@ -139,6 +205,18 @@ io.on('connection', (socket) => {
     cleanupPartner(socket);
     leaveRoom(socket);
     lastFindPartner.delete(socket.id);
+    // Presence cleanup
+    const gid = socketGuest.get(socket.id);
+    if (gid) {
+      socketGuest.delete(socket.id);
+      if (online.get(gid) === socket.id) {
+        online.delete(gid);
+        notifyPresence(gid, false);
+      }
+    }
+    if (socket.data.watched) {
+      for (const id of socket.data.watched) watchers.get(id)?.delete(socket.id);
+    }
     broadcastOnline();
   });
 });
