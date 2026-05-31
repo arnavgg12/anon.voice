@@ -356,18 +356,15 @@ a { color: inherit; }
 .controls button.hidden { display: none; }
 
 /* ---- Focus mode: on a game/canvas tab, collapse the header so the activity
-   panel gets nearly the whole screen. Smooth-shrinks the orb + hides labels. ---- */
-#app.focus-mode .orb-wrap { margin: 4px 0; gap: 0; }
-#app.focus-mode .orb { width: 40px; height: 40px; font-size: 22px; }
-#app.focus-mode .orb::before { display: none; }
-#app.focus-mode .partner-name { display: none; }
-#app.focus-mode .status { display: none; }
-#app.focus-mode .controls { margin-top: 4px; }
-/* compact the top bar: keep the avatar, drop the name + nudge buttons smaller */
+   panel gets nearly the whole screen. The orb is dropped entirely (the partner
+   avatar already lives in the top bar), removing the stray floating circle. ---- */
+#app.focus-mode .orb-wrap { display: none; }
+#app.focus-mode .controls { margin-top: 0; }
+/* compact the top bar: keep the avatar, drop the name */
 #app.focus-mode .id-name { display: none; }
 #app.focus-mode .app-bar { margin-bottom: 0; }
 /* the chat/activity panel expands to fill the reclaimed space */
-#app.focus-mode .chat { margin-top: 8px; }
+#app.focus-mode .chat { margin-top: 10px; }
 
 button {
   font-family: inherit; padding: 13px 26px; border-radius: var(--r-pill);
