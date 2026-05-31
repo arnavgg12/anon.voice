@@ -14,8 +14,6 @@ const waiting = { voice: null, text: null };
 const partners = new Map();
 const ROOMS = new Set(['lounge', 'chill']);
 const ROOM_CAP = 5;
-const SKIP_COOLDOWN_MS = 3000;
-const lastFindPartner = new Map();
 let reportCount = 0;
 
 // Friends / presence (in-memory; friend lists themselves live in each client's
@@ -86,13 +84,6 @@ io.on('connection', (socket) => {
 
   socket.on('find-partner', (opts) => {
     const mode = opts && opts.mode === 'text' ? 'text' : 'voice';
-    const last = lastFindPartner.get(socket.id) || 0;
-    const wait = SKIP_COOLDOWN_MS - (Date.now() - last);
-    if (wait > 0) {
-      socket.emit('skip-cooldown', { ms: wait });
-      return;
-    }
-    lastFindPartner.set(socket.id, Date.now());
     cleanupPartner(socket);
     leaveRoom(socket);
 
@@ -204,7 +195,6 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     cleanupPartner(socket);
     leaveRoom(socket);
-    lastFindPartner.delete(socket.id);
     // Presence cleanup
     const gid = socketGuest.get(socket.id);
     if (gid) {

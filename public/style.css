@@ -910,6 +910,27 @@ button:focus-visible,
   .hero { padding: 36px 0 20px; }
   .section { padding: 34px 0; }
   .float { font-size: 22px; }
+
+  /* App view: stop vertical-centering an overflowing column, tighten everything */
+  #app {
+    justify-content: flex-start;
+    padding: 10px 14px 20px;
+  }
+  .app-bar { gap: 8px; margin-bottom: 4px; }
+  .iconbtn { width: 34px; height: 34px; font-size: 16px; }
+  .self-identity { font-size: 12px; gap: 6px; }
+  .id-avatar { width: 22px; height: 22px; font-size: 13px; }
+
+  /* Smaller orb + tighter spacing reclaims most of the wasted height */
+  .orb-wrap { margin: 6px 0 14px; gap: 12px; }
+  .orb { width: 96px; height: 96px; }
+  .status { font-size: 14px; }
+
+  .controls { margin-top: 4px; gap: 8px; }
+  .controls button { padding: 10px 18px; }
+
+  /* Chat panel grows to fill the freed space instead of a fixed 480px */
+  .chat { margin-top: 14px; height: auto; flex: 1; min-height: 300px; }
 }
 
 /* ===================== FRIENDS ===================== */

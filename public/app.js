@@ -1016,13 +1016,6 @@ socket.on('room-full', ({ room, cap }) => {
   if (mode === 'room') leaveRoom();
 });
 
-socket.on('skip-cooldown', ({ ms }) => {
-  const sec = Math.ceil(ms / 1000);
-  setStatus(`Slow down — try again in ${sec}s.`, 'searching');
-  skipBtn.disabled = true;
-  setTimeout(() => { if (mode === 'random') skipBtn.disabled = false; }, ms);
-});
-
 async function handleMatch({ initiator, peerId, mode: matchedMode }) {
   pendingCallTo = null;
   // partnerIdentity may already be set (friend call); else placeholder from socket id
