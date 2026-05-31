@@ -60,14 +60,32 @@ const statusEl = document.getElementById('status');
 const orbEl = document.getElementById('orb');
 const remoteAudio = document.getElementById('remote-audio');
 
-const ICE_SERVERS = [
+// ICE config is fetched from the server (/ice) so it can include TURN relays
+// for users on restrictive networks. Falls back to STUN-only if the fetch fails.
+let ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' }
 ];
 
+async function loadIceServers() {
+  try {
+    const res = await fetch('/ice', { cache: 'no-store' });
+    const data = await res.json();
+    if (data && Array.isArray(data.iceServers) && data.iceServers.length) {
+      ICE_SERVERS = data.iceServers;
+    }
+  } catch (err) {
+    console.warn('Falling back to STUN-only ICE:', err);
+  }
+}
+loadIceServers();
+
 let pc = null;
 let localStream = null;
 let isMuted = false;
+let iceRestartTimer = null;
+let lastInitiator = false;
+let lastWithAudio = false;
 let chatChannel = null;
 let board = null;
 let sudokuState = null;
@@ -690,7 +708,8 @@ async function ensureMic() {
   if (localStream) return localStream;
   try {
     localStream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true }
+      // autoGainControl + EC/NS clean up noisy/laggy mics on weak setups.
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
     });
     return localStream;
   } catch (err) {
@@ -699,8 +718,37 @@ async function ensureMic() {
   }
 }
 
+// Enable Opus in-band FEC (forward error correction) + DTX so audio survives
+// packet loss and uses less bandwidth in silence — big win on weak connections.
+function tuneAudioSdp(sdp) {
+  if (!sdp || !sdp.sdp) return sdp;
+  let s = sdp.sdp;
+  if (/useinbandfec=1/.test(s)) return sdp; // already tuned
+  s = s.replace(/(a=fmtp:\d+ [^\n]*)/g, (line) =>
+    /opus/i.test(line) || /111/.test(line)
+      ? line + ';useinbandfec=1;usedtx=1;maxaveragebitrate=24000'
+      : line
+  );
+  return new RTCSessionDescription({ type: sdp.type, sdp: s });
+}
+
+function partnerName() {
+  return partnerIdentity ? `${partnerIdentity.emoji} ${partnerIdentity.name}` : 'a stranger';
+}
+
+async function restartIce() {
+  if (!pc || !lastInitiator) return; // only the offerer drives the restart
+  try {
+    const offer = await pc.createOffer({ iceRestart: true });
+    await pc.setLocalDescription(tuneAudioSdp(offer));
+    socket.emit('signal', { type: 'offer', sdp: pc.localDescription });
+  } catch (err) { console.warn('ICE restart failed:', err); }
+}
+
 function createPeer(initiator, withAudio) {
-  pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  lastInitiator = initiator;
+  lastWithAudio = withAudio;
+  pc = new RTCPeerConnection({ iceServers: ICE_SERVERS, iceCandidatePoolSize: 4 });
 
   if (withAudio && localStream) {
     localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
@@ -718,18 +766,35 @@ function createPeer(initiator, withAudio) {
     if (e.candidate) socket.emit('signal', { type: 'ice', candidate: e.candidate });
   };
 
+  pc.oniceconnectionstatechange = () => {
+    if (!pc) return;
+    // On a transient drop, try an ICE restart before giving up.
+    if (pc.iceConnectionState === 'disconnected') {
+      setStatus(`Reconnecting to ${partnerName()}…`, 'searching');
+      clearTimeout(iceRestartTimer);
+      iceRestartTimer = setTimeout(() => {
+        if (pc && (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed')) restartIce();
+      }, 2000);
+    } else if (pc.iceConnectionState === 'failed') {
+      restartIce();
+    }
+  };
+
   pc.onconnectionstatechange = () => {
     if (!pc) return;
     if (pc.connectionState === 'connected') {
-      const partnerName = partnerIdentity ? `${partnerIdentity.emoji} ${partnerIdentity.name}` : 'a stranger';
-      setStatus(textOnly ? `Connected with ${partnerName} — start typing.` : `Connected with ${partnerName}.`, 'live');
+      clearTimeout(iceRestartTimer);
+      setStatus(textOnly ? `Connected with ${partnerName()} — start typing.` : `Connected with ${partnerName()}.`, 'live');
     } else if (pc.connectionState === 'failed') {
-      setStatus('Connection failed.', 'idle');
+      // Last resort: full restart attempt; if that can't run, surface it.
+      restartIce();
+      setStatus(`Connection trouble — retrying…`, 'searching');
     }
   };
 }
 
 function teardownPeer() {
+  clearTimeout(iceRestartTimer);
   if (chatChannel) {
     try { chatChannel.close(); } catch {}
     chatChannel = null;
@@ -895,10 +960,10 @@ function startActivityLoop() { if (!activityRafId) activityRafId = requestAnimat
 function stopActivityLoop() { if (activityRafId) cancelAnimationFrame(activityRafId); activityRafId = null; }
 
 function createRoomPeer(peerId, initiator) {
-  const peerPc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  const peerPc = new RTCPeerConnection({ iceServers: ICE_SERVERS, iceCandidatePoolSize: 4 });
   if (localStream) localStream.getTracks().forEach((t) => peerPc.addTrack(t, localStream));
   if (!participants.has(peerId)) {
-    participants.set(peerId, { color: colorForId(peerId), speaking: false });
+    participants.set(peerId, { color: colorForId(peerId), speaking: false, initiator });
   }
   renderParticipants();
   peerPc.ontrack = (e) => {
@@ -916,12 +981,27 @@ function createRoomPeer(peerId, initiator) {
   peerPc.onicecandidate = (e) => {
     if (e.candidate) socket.emit('room-signal', { to: peerId, type: 'ice', candidate: e.candidate });
   };
+  // Recover a flaky room leg with an ICE restart (the side that offered drives it).
+  peerPc.oniceconnectionstatechange = () => {
+    if (!roomPeers.has(peerId)) return;
+    if ((peerPc.iceConnectionState === 'failed' || peerPc.iceConnectionState === 'disconnected') && initiator) {
+      setTimeout(async () => {
+        if (!roomPeers.has(peerId)) return;
+        if (peerPc.iceConnectionState === 'connected' || peerPc.iceConnectionState === 'completed') return;
+        try {
+          const offer = await peerPc.createOffer({ iceRestart: true });
+          await peerPc.setLocalDescription(tuneAudioSdp(offer));
+          socket.emit('room-signal', { to: peerId, type: 'offer', sdp: peerPc.localDescription });
+        } catch (err) { console.warn('Room ICE restart failed:', err); }
+      }, 1500);
+    }
+  };
   roomPeers.set(peerId, peerPc);
   if (initiator) {
     (async () => {
       const offer = await peerPc.createOffer();
-      await peerPc.setLocalDescription(offer);
-      socket.emit('room-signal', { to: peerId, type: 'offer', sdp: offer });
+      await peerPc.setLocalDescription(tuneAudioSdp(offer));
+      socket.emit('room-signal', { to: peerId, type: 'offer', sdp: peerPc.localDescription });
     })();
   }
   return peerPc;
@@ -961,8 +1041,8 @@ socket.on('room-signal', async ({ from, type, sdp, candidate }) => {
     if (type === 'offer') {
       await peerPc.setRemoteDescription(new RTCSessionDescription(sdp));
       const answer = await peerPc.createAnswer();
-      await peerPc.setLocalDescription(answer);
-      socket.emit('room-signal', { to: from, type: 'answer', sdp: answer });
+      await peerPc.setLocalDescription(tuneAudioSdp(answer));
+      socket.emit('room-signal', { to: from, type: 'answer', sdp: peerPc.localDescription });
     } else if (type === 'answer') {
       await peerPc.setRemoteDescription(new RTCSessionDescription(sdp));
     } else if (type === 'ice') {
@@ -1040,8 +1120,8 @@ async function handleMatch({ initiator, peerId, mode: matchedMode }) {
   createPeer(initiator, withAudio);
   if (initiator) {
     const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    socket.emit('signal', { type: 'offer', sdp: offer });
+    await pc.setLocalDescription(tuneAudioSdp(offer));
+    socket.emit('signal', { type: 'offer', sdp: pc.localDescription });
   }
   setStatus('Connecting…', 'searching');
 }
@@ -1050,10 +1130,11 @@ async function handleSignal(data) {
   if (!pc) return;
   try {
     if (data.type === 'offer') {
+      // Works for the initial offer AND ICE-restart offers (renegotiation).
       await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
       const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      socket.emit('signal', { type: 'answer', sdp: answer });
+      await pc.setLocalDescription(tuneAudioSdp(answer));
+      socket.emit('signal', { type: 'answer', sdp: pc.localDescription });
     } else if (data.type === 'answer') {
       await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
     } else if (data.type === 'ice') {

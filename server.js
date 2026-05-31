@@ -6,6 +6,41 @@ const { Server } = require('socket.io');
 const app = express();
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ICE config endpoint. STUN finds your public address; TURN *relays* media
+// when a direct path is impossible (symmetric NAT, strict firewalls, some
+// mobile carriers) — without it, ~10-15% of users can't connect at all.
+//
+// By default we ship free, open TURN relays (OpenRelay by Metered). For
+// production reliability set your own via env vars — NO secrets in the repo:
+//   TURN_URLS="turn:turn.example.com:3478,turns:turn.example.com:5349"
+//   TURN_USERNAME="..."   TURN_CREDENTIAL="..."
+function iceServers() {
+  const list = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+  ];
+  if (process.env.TURN_URLS) {
+    list.push({
+      urls: process.env.TURN_URLS.split(',').map((u) => u.trim()).filter(Boolean),
+      username: process.env.TURN_USERNAME || '',
+      credential: process.env.TURN_CREDENTIAL || '',
+    });
+  } else {
+    // Free public fallback so strict-NAT users still connect out of the box.
+    list.push(
+      { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+    );
+  }
+  return list;
+}
+
+app.get('/ice', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ iceServers: iceServers() });
+});
+
 const server = http.createServer(app);
 const io = new Server(server);
 
