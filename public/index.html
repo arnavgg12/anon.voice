@@ -29,6 +29,12 @@
     <div class="live-pill"><span class="live-dot"></span> <span id="hero-online">0</span> online now</div>
     <h1>Talk to strangers,<br><span class="grad">your way.</span></h1>
     <p class="hero-sub">Voice or text, one tap away. No login, no camera, nothing saved — and games to break the ice.</p>
+
+    <div class="interest-pick" aria-label="Pick what you want to talk about">
+      <span class="interest-pick-label">I'm in the mood for…</span>
+      <div id="interest-chips" class="interest-chips"></div>
+    </div>
+
     <div class="hero-cta">
       <button class="btn-primary big" data-start="voice"><span class="btn-ico">🎤</span> Start a voice chat</button>
       <button class="btn-ghost big" data-start="text"><span class="btn-ico">💬</span> Start a text chat</button>
@@ -148,6 +154,11 @@
     </div>
 
     <div class="tab-panel" data-panel="chat">
+      <div id="icebreaker" class="icebreaker hidden">
+        <span class="icebreaker-eyebrow">💡 Icebreaker</span>
+        <span id="icebreaker-text" class="icebreaker-text"></span>
+        <button id="icebreaker-shuffle" class="icebreaker-shuffle" title="New icebreaker" aria-label="New icebreaker">🔀</button>
+      </div>
       <div id="messages" class="messages"></div>
       <form id="chat-form" class="chat-form" autocomplete="off">
         <input id="chat-input" type="text" placeholder="Type a message…" maxlength="500" disabled>
@@ -245,6 +256,7 @@
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="identity.js"></script>
+<script src="prompts.js"></script>
 <script src="minesweeper.js"></script>
 <script src="sudoku.js"></script>
 <script src="connect4.js"></script>

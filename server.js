@@ -44,9 +44,14 @@ app.get('/ice', (_req, res) => {
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Separate waiting slots per mode so text users match text, voice match voice.
-const waiting = { voice: null, text: null };
+// Waiting pools per mode. Each entry: { socket, interest, since }.
+// Interest-aware matching: prefer someone who shares an interest tag; after a
+// short grace window, fall back to anyone so nobody waits forever.
+const waiting = { voice: [], text: [] };
+const INTEREST_GRACE_MS = 6000;  // try hard to interest-match for the first 6s
 const partners = new Map();
+
+let icebreakerCounter = 1;  // monotonic seed so matched pairs share a prompt index
 const ROOMS = new Set(['lounge', 'chill']);
 const ROOM_CAP = 5;
 let reportCount = 0;
@@ -65,9 +70,7 @@ function cleanupPartner(socket) {
     const partner = io.sockets.sockets.get(partnerId);
     if (partner) partner.emit('partner-left');
   }
-  for (const q of Object.keys(waiting)) {
-    if (waiting[q] && waiting[q].id === socket.id) waiting[q] = null;
-  }
+  removeFromPools(socket.id);
 }
 
 function leaveRoom(socket) {
@@ -119,22 +122,33 @@ io.on('connection', (socket) => {
 
   socket.on('find-partner', (opts) => {
     const mode = opts && opts.mode === 'text' ? 'text' : 'voice';
+    const interest = (opts && typeof opts.interest === 'string') ? opts.interest : 'any';
     cleanupPartner(socket);
     leaveRoom(socket);
+    removeFromPools(socket.id);
 
-    const slot = waiting[mode];
-    if (slot && slot.id !== socket.id && slot.connected) {
-      const partner = slot;
-      waiting[mode] = null;
+    const me = { socket, interest, since: Date.now() };
+    const pool = pools[mode];
+    const match = pickPartner(pool, me);
+
+    if (match) {
+      pools[mode] = pool.filter((e) => e.socket.id !== match.socket.id);
+      const partner = match.socket;
       partners.set(socket.id, partner.id);
       partners.set(partner.id, socket.id);
-      socket.emit('matched', { initiator: true, peerId: partner.id, mode });
-      partner.emit('matched', { initiator: false, peerId: socket.id, mode });
+      const seed = matchSeed++;                         // shared icebreaker seed
+      const shared = (interest !== 'any') ? interest : (match.interest !== 'any' ? match.interest : 'any');
+      socket.emit('matched',  { initiator: true,  peerId: partner.id, mode, seed, sharedInterest: shared });
+      partner.emit('matched', { initiator: false, peerId: socket.id, mode, seed, sharedInterest: shared });
     } else {
-      waiting[mode] = socket;
-      socket.emit('waiting', { mode });
+      pool.push(me);
+      socket.emit('waiting', { mode, interest });
     }
   });
+
+  // Periodically flush long-waiters into any-match within their mode.
+  // (Handled lazily by pickPartner's fallback window on the next find-partner;
+  // no timer needed for an MVP — new arrivals drive matching.)
 
   socket.on('report', () => {
     reportCount++;

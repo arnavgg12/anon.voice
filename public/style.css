@@ -147,6 +147,43 @@ a { color: inherit; }
 .hero-cta { display: flex; flex-direction: column; gap: 12px; max-width: 360px; margin: 0 auto; }
 .hero-fine { color: var(--faint); font-size: 13px; margin-top: 18px; letter-spacing: 0.02em; }
 
+/* Interest picker on the landing hero */
+.interest-pick { margin: 30px auto 28px; max-width: 420px; }
+.interest-pick-label { display: block; color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+.interest-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.interest-chip {
+  font-family: inherit; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 9px 14px; border-radius: var(--r-pill);
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--muted); font-size: 13.5px; font-weight: 500;
+  transition: all .15s;
+}
+.interest-chip:hover { color: var(--fg); border-color: var(--border-2); transform: translateY(-1px); }
+.interest-chip.active {
+  background: rgba(124,108,255,0.16); border-color: var(--accent); color: var(--fg);
+  box-shadow: 0 4px 16px -6px rgba(124,108,255,0.6);
+}
+.interest-chip span { font-size: 1.05em; }
+
+/* Icebreaker banner inside the chat panel */
+.icebreaker {
+  display: flex; align-items: center; gap: 10px;
+  margin: 12px 12px 4px; padding: 12px 14px;
+  background: linear-gradient(135deg, rgba(124,108,255,0.16), rgba(176,108,255,0.1));
+  border: 1px solid rgba(124,108,255,0.28); border-radius: var(--r);
+  animation: ibIn .3s ease;
+}
+.icebreaker.hidden { display: none; }
+@keyframes ibIn { from { opacity: 0; transform: translateY(-6px);} to { opacity: 1; transform: translateY(0);} }
+.icebreaker-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; color: var(--accent-2); text-transform: uppercase; flex: none; }
+.icebreaker-text { flex: 1; font-size: 14px; line-height: 1.4; color: var(--fg); }
+.icebreaker-shuffle {
+  flex: none; width: 32px; height: 32px; padding: 0; border-radius: 50%;
+  background: var(--surface); border: 1px solid var(--border-2); font-size: 14px; cursor: pointer;
+}
+.icebreaker-shuffle:hover { background: var(--surface-2); }
+
 /* ============================================================
    Buttons
    ============================================================ */
@@ -549,4 +586,13 @@ button:focus-visible, .tab:focus-visible, a:focus-visible { outline: 2px solid v
   .status { font-size: 13px; }
   .tab { font-size: 18px; padding: 8px; min-width: 38px; }
   .section { padding: 40px 0; }
+}
+
+/* Respect users who prefer less motion (accessibility) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

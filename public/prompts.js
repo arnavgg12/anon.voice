@@ -1,0 +1,58 @@
+// Shared content: interests (for matching) + icebreakers (to kill dead air).
+// Both peers derive the SAME icebreaker from a shared seed, so no negotiation.
+
+const INTERESTS = [
+  { id: 'any',     label: 'Anything',   emoji: '🎲' },
+  { id: 'music',   label: 'Music',      emoji: '🎵' },
+  { id: 'gaming',  label: 'Gaming',     emoji: '🎮' },
+  { id: 'movies',  label: 'Movies',     emoji: '🎬' },
+  { id: 'deep',    label: 'Deep talks', emoji: '💭' },
+  { id: 'vibing',  label: 'Just vibing',emoji: '😎' },
+  { id: 'study',   label: 'Study',      emoji: '📚' },
+  { id: 'lang',    label: 'Languages',  emoji: '🌍' },
+];
+
+const ICEBREAKERS = [
+  "What's the last song you had on repeat?",
+  "Tea or coffee — and how do you take it?",
+  "What's a small thing that made you smile today?",
+  "Beach trip or mountain trip?",
+  "What show are you watching right now?",
+  "If you could teleport anywhere right now, where?",
+  "What's your comfort food at 2am?",
+  "Cats, dogs, or something weirder?",
+  "What's the best advice you've ever gotten?",
+  "Early bird or night owl?",
+  "What's a hobby you'd pick up if time was free?",
+  "Most-used app on your phone (be honest)?",
+  "What's a movie you can rewatch forever?",
+  "Window seat or aisle seat?",
+  "What's something you're low-key really good at?",
+  "Pineapple on pizza — defend your answer.",
+  "What's the dream job 8-year-old you wanted?",
+  "Last thing that made you laugh out loud?",
+  "Summer or winter person?",
+  "What's playing in your headphones lately?",
+  "If you had a free weekend, no plans — what now?",
+  "Texting or calling?",
+  "What's a skill you wish they taught in school?",
+  "Sweet or savory snacks?",
+  "What's the best meal you've had recently?",
+  "City lights or starry skies?",
+  "What's a tiny thing that instantly improves your mood?",
+  "Books, podcasts, or pure silence?",
+  "What's the most spontaneous thing you've done?",
+  "If your life had a theme song, what would it be?",
+  "What are you weirdly passionate about?",
+  "Morning routine or chaos?",
+  "What's a place on your travel bucket list?",
+  "Would you rather explore space or the ocean?",
+  "What's the last photo in your camera roll?",
+  "Underrated food that deserves more love?",
+  "What's a small win you had this week?",
+  "Handwritten notes or typed?",
+  "What's a song that takes you back instantly?",
+  "If you could master one language overnight, which?",
+];
+
+window.Prompts = { INTERESTS, ICEBREAKERS };

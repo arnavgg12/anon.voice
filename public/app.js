@@ -60,6 +60,10 @@ const statusEl = document.getElementById('status');
 const orbEl = document.getElementById('orb');
 const remoteAudio = document.getElementById('remote-audio');
 const partnerNameEl = document.getElementById('partner-name');
+const interestChipsEl = document.getElementById('interest-chips');
+const icebreakerEl = document.getElementById('icebreaker');
+const icebreakerTextEl = document.getElementById('icebreaker-text');
+const icebreakerShuffleBtn = document.getElementById('icebreaker-shuffle');
 
 // ICE config is fetched from the server (/ice) so it can include TURN relays
 // for users on restrictive networks. Falls back to STUN-only if the fetch fails.
@@ -104,6 +108,10 @@ let peerSentFriendReq = false;
 let pendingCallTo = null;     // guestId we're ringing
 let incomingCall = null;      // { fromSocket, mode, idn }
 const onlineFriends = new Set();
+let selectedInterest = 'any'; // what the user picked on the landing page
+let matchSeed = 0;            // shared seed → identical icebreaker on both sides
+let matchSharedInterest = 'any';
+let icebreakerStep = 0;       // shuffle offset (kept in sync between peers)
 
 // Persistent anonymous identity for this browser (enables friends w/o login)
 let guestId = null;
@@ -127,6 +135,46 @@ const BAD_WORDS = ['fuck','shit','bitch','asshole','bastard','cunt','dick','slut
 const badRe = new RegExp('\\b(' + BAD_WORDS.join('|') + ')\\b', 'gi');
 function clean(text) {
   return String(text).replace(badRe, (m) => '*'.repeat(m.length));
+}
+
+// ---------- interests + icebreakers ----------
+function interestLabel(id) {
+  const it = (window.Prompts?.INTERESTS || []).find((x) => x.id === id);
+  return it && it.id !== 'any' ? it.label : '';
+}
+
+function buildInterestChips() {
+  if (!interestChipsEl || !window.Prompts) return;
+  interestChipsEl.innerHTML = '';
+  Prompts.INTERESTS.forEach((it) => {
+    const b = document.createElement('button');
+    b.className = 'interest-chip' + (it.id === selectedInterest ? ' active' : '');
+    b.dataset.interest = it.id;
+    b.innerHTML = `<span>${it.emoji}</span> ${it.label}`;
+    b.addEventListener('click', () => {
+      selectedInterest = it.id;
+      buildInterestChips();
+    });
+    interestChipsEl.appendChild(b);
+  });
+}
+
+// Both peers share matchSeed + icebreakerStep → identical prompt, no negotiation.
+function currentIcebreaker() {
+  const list = window.Prompts?.ICEBREAKERS || [];
+  if (!list.length) return '';
+  return list[(matchSeed + icebreakerStep) % list.length];
+}
+
+function showIcebreaker() {
+  if (!icebreakerEl) return;
+  icebreakerTextEl.textContent = currentIcebreaker();
+  icebreakerEl.classList.remove('hidden');
+}
+
+function hideIcebreaker() {
+  if (icebreakerEl) icebreakerEl.classList.add('hidden');
+  icebreakerStep = 0;
 }
 
 // ---------- identity ----------
@@ -361,6 +409,7 @@ function appendSystem(text) { appendMessage(text, 'system'); }
 function clearChat() {
   messagesEl.innerHTML = '';
   chatInput.value = '';
+  hideIcebreaker();
   clearGame();
   switchTab('chat');
 }
@@ -410,6 +459,9 @@ function setupChatChannel(channel) {
           addFriendBtn.disabled = true;
         }
       }
+    } else if (msg.type === 'ice-shuffle') {
+      icebreakerStep = msg.step || 0;
+      showIcebreaker();
     } else if (msg.type === 'friend-add') {
       peerSentFriendReq = true;
       if (!iSentFriendReq && partnerIdentity) {
@@ -836,8 +888,10 @@ async function startCall(asText) {
     try { await ensureMic(); } catch { goHome(); return; }
   }
   configureControls();
-  setStatus(textOnly ? 'Finding someone to text…' : 'Finding someone to talk to…', 'searching');
-  socket.emit('find-partner', { mode: textOnly ? 'text' : 'voice' });
+  hideIcebreaker();
+  const tag = interestLabel(selectedInterest);
+  setStatus(tag ? `Finding someone for ${tag.toLowerCase()}…` : (textOnly ? 'Finding someone to text…' : 'Finding someone to talk to…'), 'searching');
+  socket.emit('find-partner', { mode: textOnly ? 'text' : 'voice', interest: selectedInterest });
 }
 
 function stopCall(silent) {
@@ -1132,7 +1186,7 @@ socket.on('room-full', ({ room, cap }) => {
   if (mode === 'room') leaveRoom();
 });
 
-async function handleMatch({ initiator, peerId, mode: matchedMode }) {
+async function handleMatch({ initiator, peerId, mode: matchedMode, seed, sharedInterest }) {
   pendingCallTo = null;
   // Do NOT derive identity from peerId (that's the ephemeral socket id, which
   // differs from the partner's persistent guestId — it would show a different
@@ -1140,6 +1194,8 @@ async function handleMatch({ initiator, peerId, mode: matchedMode }) {
   // the 'hello' message once the data channel opens. partnerIdentity may already
   // be set for an outgoing friend call (where we know the guestId).
   partnerAnnounced = false;
+  matchSeed = seed || 0;
+  matchSharedInterest = sharedInterest || 'any';
   const withAudio = matchedMode !== 'text';
   createPeer(initiator, withAudio);
   if (initiator) {
@@ -1318,3 +1374,14 @@ document.addEventListener('keydown', (e) => {
     }
   }
 });
+
+// ---------- icebreakers + interest chips wiring ----------
+buildInterestChips();
+
+if (icebreakerShuffleBtn) {
+  icebreakerShuffleBtn.addEventListener('click', () => {
+    icebreakerStep++;
+    showIcebreaker();
+    sendOverChannel({ type: 'ice-shuffle', step: icebreakerStep });
+  });
+}
