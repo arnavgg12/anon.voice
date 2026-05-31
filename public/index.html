@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>anon.voice — talk to strangers by voice, text, or play</title>
 <meta name="description" content="Talk to strangers by voice or text, instantly and anonymously. No login, no camera, nothing recorded. Play games together while you chat. A friendly Omegle alternative.">
+<meta name="theme-color" content="#0a0a14">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -21,22 +25,15 @@
   </nav>
 
   <header class="hero">
+    <div class="aurora" aria-hidden="true"></div>
     <div class="live-pill"><span class="live-dot"></span> <span id="hero-online">0</span> online now</div>
-    <h1>Talk to strangers by<br><span class="grad">voice, text, or play</span></h1>
-    <p class="hero-sub">Press one button and you're instantly in a 1-on-1 chat with someone random. No login. No camera. Nothing recorded — when the chat ends, it's gone.</p>
+    <h1>Talk to strangers,<br><span class="grad">your way.</span></h1>
+    <p class="hero-sub">Voice or text, one tap away. No login, no camera, nothing saved — and games to break the ice.</p>
     <div class="hero-cta">
-      <button class="btn-primary big" data-start="voice">🎤 Start a voice chat</button>
-      <button class="btn-ghost big" data-start="text">💬 Start a text chat</button>
+      <button class="btn-primary big" data-start="voice"><span class="btn-ico">🎤</span> Start a voice chat</button>
+      <button class="btn-ghost big" data-start="text"><span class="btn-ico">💬</span> Start a text chat</button>
     </div>
     <p class="hero-fine">Free · Anonymous · 18+</p>
-
-    <div class="hero-orbit" aria-hidden="true">
-      <span class="float a">🦊</span>
-      <span class="float b">🐼</span>
-      <span class="float c">🦉</span>
-      <span class="float d">🐧</span>
-      <span class="float e">🐸</span>
-    </div>
   </header>
 
   <section id="friends-section" class="section friends-section hidden">
