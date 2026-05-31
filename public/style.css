@@ -121,29 +121,6 @@ header h1 {
 
 .controls button.hidden { display: none; }
 
-/* Clean call-style control buttons: stacked icon + label */
-.callbtn {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  background: #1a1f2c;
-  border: 1px solid #2a3042;
-  color: var(--fg);
-  border-radius: 16px;
-  padding: 10px 22px;
-  min-width: 78px;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, transform 0.05s;
-}
-.callbtn:hover:not(:disabled) { background: #232a3b; }
-.callbtn:active:not(:disabled) { transform: translateY(1px); }
-.callbtn:disabled { opacity: 0.45; cursor: default; }
-.callbtn-ico { font-size: 22px; line-height: 1; }
-.callbtn-lbl { font-size: 12px; color: var(--muted); letter-spacing: 0.2px; }
-.callbtn.muted { border-color: #ff6b6b; background: rgba(255,107,107,0.08); }
-.callbtn.muted .callbtn-lbl { color: #ff8585; }
-
 .count {
   display: inline-block;
   margin-left: 6px;
