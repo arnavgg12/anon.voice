@@ -56,6 +56,12 @@ header h1 {
   box-shadow: 0 0 0 1px #232838 inset, 0 20px 60px rgba(0,0,0,0.4);
   position: relative;
   transition: box-shadow 0.4s ease, background 0.4s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 72px;
+  line-height: 1;
+  user-select: none;
 }
 
 .orb::after {
@@ -76,6 +82,15 @@ header h1 {
 .orb.live {
   background: radial-gradient(circle at 35% 30%, #4d7cff, #1f2f6e);
   box-shadow: 0 0 0 1px #6c8eff inset, 0 0 60px rgba(108,142,255,0.3);
+}
+
+/* When an avatar is shown, tint the ring + glow to that identity's color
+   and keep a dark interior so the emoji reads clearly. Placed after .live
+   so it wins when both classes are present (connected + avatar). */
+.orb.has-avatar {
+  background: radial-gradient(circle at 35% 30%, #232a38, #0d1018);
+  box-shadow: 0 0 0 3px var(--orb-tint, #6c8eff) inset,
+              0 0 55px -8px var(--orb-tint, #6c8eff);
 }
 
 @keyframes pulse {
@@ -923,7 +938,7 @@ button:focus-visible,
 
   /* Smaller orb + tighter spacing reclaims most of the wasted height */
   .orb-wrap { margin: 6px 0 14px; gap: 12px; }
-  .orb { width: 96px; height: 96px; }
+  .orb { width: 96px; height: 96px; font-size: 46px; }
   .status { font-size: 14px; }
 
   .controls { margin-top: 4px; gap: 8px; }

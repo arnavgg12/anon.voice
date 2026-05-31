@@ -249,9 +249,25 @@ function closeCallModal() {
   incomingCall = null;
 }
 
+function refreshOrb() {
+  // 1-on-1 → show the partner's avatar; rooms → show your own; else empty.
+  let idn = null;
+  if (mode === 'room') idn = selfIdentity();
+  else if (mode === 'random' && partnerIdentity) idn = partnerIdentity;
+  if (idn) {
+    orbEl.textContent = idn.emoji;
+    orbEl.style.setProperty('--orb-tint', idn.color);
+    orbEl.classList.add('has-avatar');
+  } else {
+    orbEl.textContent = '';
+    orbEl.classList.remove('has-avatar');
+  }
+}
+
 function setStatus(text, orbState) {
   statusEl.textContent = text;
   if (orbState) orbEl.className = 'orb ' + orbState;
+  refreshOrb();
 }
 
 // ---------- navigation ----------
