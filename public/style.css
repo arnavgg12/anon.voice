@@ -399,7 +399,7 @@ button:focus-visible, .tab:focus-visible, a:focus-visible { outline: 2px solid v
 .tab:hover:not(.active) { opacity: 0.85; }
 .tab.active { opacity: 1; background: rgba(124,108,255,0.16); }
 
-.tab-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.tab-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 
 /* ----- Messages ----- */
 .messages { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
@@ -528,8 +528,8 @@ button:focus-visible, .tab:focus-visible, a:focus-visible { outline: 2px solid v
 .draw-size input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: none; border-radius: 50%; background: var(--accent); cursor: pointer; }
 .draw-size-dot { width: 32px; display: flex; align-items: center; justify-content: center; flex: none; }
 .draw-size-dot::after { content: ''; width: var(--dot, 6px); height: var(--dot, 6px); border-radius: 50%; background: var(--fg); }
-.draw-wrap { flex: 1; display: flex; padding: 8px; }
-#draw-canvas { flex: 1; width: 100%; height: 100%; background: rgba(0,0,0,0.25); border-radius: var(--r-sm); cursor: crosshair; touch-action: none; }
+.draw-wrap { flex: 1 1 auto; min-height: 0; position: relative; padding: 8px; }
+#draw-canvas { position: absolute; inset: 8px; width: auto; height: auto; background: rgba(0,0,0,0.25); border-radius: var(--r-sm); cursor: crosshair; touch-action: none; }
 
 /* ============================================================
    FRIENDS
