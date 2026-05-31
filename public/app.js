@@ -98,6 +98,7 @@ let textOnly = false;     // random text-only chat (no mic)
 let currentRoom = null;
 let partnerIdentity = null;
 let partnerGuestId = null;
+let partnerAnnounced = false; // have we shown the "now talking with X" line yet?
 let iSentFriendReq = false;
 let peerSentFriendReq = false;
 let pendingCallTo = null;     // guestId we're ringing
@@ -385,13 +386,11 @@ function setupChatChannel(channel) {
     dbNewBtn.disabled = false;
     drawClearBtn.disabled = false;
     addFriendBtn.disabled = false;
-    // Exchange persistent identity so the displayed name is stable for friends
+    // Exchange persistent identity so BOTH sides derive the same name from the
+    // same guestId. We announce the partner only after their hello arrives
+    // (announcePartner), so the name shown matches what they call themselves.
     sendOverChannel({ type: 'hello', guestId });
-    if (partnerIdentity) {
-      appendSystem(`You're now talking with ${partnerIdentity.emoji} ${partnerIdentity.name}.`);
-    } else {
-      appendSystem('Connected. Say hi.');
-    }
+    if (partnerGuestId) announcePartner();
   };
   channel.onmessage = (e) => {
     let msg;
@@ -400,6 +399,12 @@ function setupChatChannel(channel) {
       if (msg.guestId) {
         partnerGuestId = msg.guestId;
         partnerIdentity = Identity.identityForId(msg.guestId);
+        refreshOrb();          // repaint orb + name with the REAL shared identity
+        // Re-sync the status line now that we know the real name.
+        if (pc && pc.connectionState === 'connected') {
+          setStatus(textOnly ? `Connected with ${partnerName()} — start typing.` : `Connected with ${partnerName()}.`, 'live');
+        }
+        announcePartner();     // "You're now talking with X" — same name both sides
         const known = loadFriends().some((f) => f.id === partnerGuestId);
         if (known) {
           addFriendBtn.textContent = '✓';
@@ -819,6 +824,7 @@ function teardownPeer() {
   if (pc) { pc.close(); pc = null; }
   remoteAudio.srcObject = null;
   partnerIdentity = null;
+  partnerAnnounced = false;
   resetFriendButton();
   chatInput.disabled = true;
   chatSend.disabled = true;
@@ -1131,8 +1137,12 @@ socket.on('room-full', ({ room, cap }) => {
 
 async function handleMatch({ initiator, peerId, mode: matchedMode }) {
   pendingCallTo = null;
-  // partnerIdentity may already be set (friend call); else placeholder from socket id
-  if (!partnerIdentity && peerId) partnerIdentity = Identity.identityForId(peerId);
+  // Do NOT derive identity from peerId (that's the ephemeral socket id, which
+  // differs from the partner's persistent guestId — it would show a different
+  // name than the partner sees for themselves). We learn the real identity from
+  // the 'hello' message once the data channel opens. partnerIdentity may already
+  // be set for an outgoing friend call (where we know the guestId).
+  partnerAnnounced = false;
   const withAudio = matchedMode !== 'text';
   createPeer(initiator, withAudio);
   if (initiator) {
