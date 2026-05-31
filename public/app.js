@@ -59,6 +59,7 @@ const drawSizeDotEl = document.getElementById('draw-size-dot');
 const statusEl = document.getElementById('status');
 const orbEl = document.getElementById('orb');
 const remoteAudio = document.getElementById('remote-audio');
+const partnerNameEl = document.getElementById('partner-name');
 
 // ICE config is fetched from the server (/ice) so it can include TURN relays
 // for users on restrictive networks. Falls back to STUN-only if the fetch fails.
@@ -135,12 +136,14 @@ function selfIdentity() {
 function showSelfIdentity() {
   const me = selfIdentity();
   selfIdentityEl.innerHTML = '';
+  selfIdentityEl.title = 'You are ' + me.name;
   const av = document.createElement('span');
   av.className = 'id-avatar';
   av.textContent = me.emoji;
   av.style.background = me.color;
   const name = document.createElement('span');
-  name.textContent = 'You are ' + me.name;
+  name.className = 'id-name';
+  name.textContent = me.name;       // compact: just the name, no "You are"
   selfIdentityEl.appendChild(av);
   selfIdentityEl.appendChild(name);
 }
@@ -280,6 +283,17 @@ function refreshOrb() {
     orbEl.textContent = '';
     orbEl.classList.remove('has-avatar');
   }
+  // The partner's name is the focal label under the orb (1-on-1 only).
+  if (partnerNameEl) {
+    if (mode === 'random' && partnerIdentity) {
+      partnerNameEl.textContent = partnerIdentity.name;
+      partnerNameEl.style.color = partnerIdentity.color;
+      partnerNameEl.classList.remove('hidden');
+    } else {
+      partnerNameEl.textContent = '';
+      partnerNameEl.classList.add('hidden');
+    }
+  }
 }
 
 function setStatus(text, orbState) {
@@ -328,7 +342,10 @@ function applyMute() {
   if (localStream) {
     localStream.getAudioTracks().forEach((t) => (t.enabled = !isMuted));
   }
-  muteBtn.textContent = isMuted ? 'Unmute' : 'Mute';
+  const ico = muteBtn.querySelector('.callbtn-ico');
+  const lbl = muteBtn.querySelector('.callbtn-lbl');
+  if (ico) ico.textContent = isMuted ? '🔇' : '🎤';
+  if (lbl) lbl.textContent = isMuted ? 'Unmute' : 'Mute';
   muteBtn.classList.toggle('muted', isMuted);
 }
 

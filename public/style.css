@@ -41,12 +41,20 @@ header h1 {
 }
 
 .orb-wrap {
-  margin: 20px 0 36px;
+  margin: 20px 0 28px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 24px;
+  gap: 12px;
 }
+
+.partner-name {
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  margin: 0;
+}
+.partner-name.hidden { display: none; }
 
 .orb {
   width: 160px;
@@ -112,6 +120,29 @@ header h1 {
 }
 
 .controls button.hidden { display: none; }
+
+/* Clean call-style control buttons: stacked icon + label */
+.callbtn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: #1a1f2c;
+  border: 1px solid #2a3042;
+  color: var(--fg);
+  border-radius: 16px;
+  padding: 10px 22px;
+  min-width: 78px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.05s;
+}
+.callbtn:hover:not(:disabled) { background: #232a3b; }
+.callbtn:active:not(:disabled) { transform: translateY(1px); }
+.callbtn:disabled { opacity: 0.45; cursor: default; }
+.callbtn-ico { font-size: 22px; line-height: 1; }
+.callbtn-lbl { font-size: 12px; color: var(--muted); letter-spacing: 0.2px; }
+.callbtn.muted { border-color: #ff6b6b; background: rgba(255,107,107,0.08); }
+.callbtn.muted .callbtn-lbl { color: #ff8585; }
 
 .count {
   display: inline-block;
@@ -542,6 +573,7 @@ audio { display: none; }
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+  touch-action: manipulation;
   transition: background 0.1s;
 }
 
@@ -906,7 +938,8 @@ button:focus-visible,
 }
 .iconbtn:hover { background: #232a3b; }
 .self-identity { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
-.id-avatar { width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; }
+.id-avatar { width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; flex: none; }
+.id-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
 
 /* chip dot now holds an emoji avatar */
 .chip-dot {
@@ -937,9 +970,11 @@ button:focus-visible,
   .id-avatar { width: 22px; height: 22px; font-size: 13px; }
 
   /* Smaller orb + tighter spacing reclaims most of the wasted height */
-  .orb-wrap { margin: 6px 0 14px; gap: 12px; }
+  .orb-wrap { margin: 6px 0 14px; gap: 10px; }
   .orb { width: 96px; height: 96px; font-size: 46px; }
-  .status { font-size: 14px; }
+  .status { font-size: 13px; }
+  .partner-name { font-size: 18px; }
+  .id-name { display: none; }       /* app bar shows just the avatar on mobile */
 
   .controls { margin-top: 4px; gap: 8px; }
   .controls button { padding: 10px 18px; }

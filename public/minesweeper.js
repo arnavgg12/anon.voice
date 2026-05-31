@@ -102,29 +102,53 @@ function renderBoard(board, container, statusEl, { onReveal, onFlag }) {
         div.classList.add('flagged');
         div.textContent = '🚩';
       }
+      // Robust input for touch + mouse. On mobile we act on touchend (a clean
+      // tap) rather than the synthetic click, which phones delay/suppress.
       let pressTimer = null;
-      let pressFired = false;
-      div.addEventListener('touchstart', () => {
-        pressFired = false;
+      let longFired = false;
+      let moved = false;
+      let viaTouch = false;
+      let startX = 0, startY = 0;
+
+      div.addEventListener('touchstart', (e) => {
+        viaTouch = true;
+        longFired = false;
+        moved = false;
+        const t = e.touches[0];
+        startX = t.clientX; startY = t.clientY;
         pressTimer = setTimeout(() => {
-          onFlag(x, y);
-          pressFired = true;
           pressTimer = null;
-        }, 450);
+          longFired = true;
+          onFlag(x, y);            // long-press = flag
+        }, 400);
       }, { passive: true });
-      const cancelPress = () => {
+
+      div.addEventListener('touchmove', (e) => {
+        const t = e.touches[0];
+        if (Math.abs(t.clientX - startX) > 12 || Math.abs(t.clientY - startY) > 12) {
+          moved = true;            // it's a scroll, not a tap
+          if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+        }
+      }, { passive: true });
+
+      div.addEventListener('touchend', (e) => {
         if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
-      };
-      div.addEventListener('touchend', cancelPress);
-      div.addEventListener('touchmove', cancelPress);
-      div.addEventListener('touchcancel', cancelPress);
-      div.addEventListener('click', (e) => {
-        if (pressFired) { pressFired = false; e.preventDefault(); return; }
-        onReveal(x, y);
+        if (longFired || moved) return;   // already flagged, or was a scroll
+        e.preventDefault();               // suppress the ghost click + zoom
+        onReveal(x, y);                   // clean tap = reveal
+      });
+
+      div.addEventListener('touchcancel', () => {
+        if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+      });
+
+      div.addEventListener('click', () => {
+        if (viaTouch) { viaTouch = false; return; }  // touch already handled it
+        onReveal(x, y);                                // desktop mouse
       });
       div.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        onFlag(x, y);
+        onFlag(x, y);                                  // desktop right-click = flag
       });
       container.appendChild(div);
     }

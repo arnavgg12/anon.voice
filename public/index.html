@@ -129,12 +129,17 @@
 
   <section class="orb-wrap">
     <div id="orb" class="orb idle"></div>
+    <h2 id="partner-name" class="partner-name"></h2>
     <p id="status" class="status" role="status" aria-live="polite">Connecting…</p>
   </section>
 
   <section class="controls">
-    <button id="skip" class="primary hidden" disabled>Skip ⏭</button>
-    <button id="mute" class="hidden" disabled>Mute</button>
+    <button id="mute" class="callbtn hidden" disabled>
+      <span class="callbtn-ico">🎤</span><span class="callbtn-lbl">Mute</span>
+    </button>
+    <button id="skip" class="callbtn hidden" disabled>
+      <span class="callbtn-ico">⏭️</span><span class="callbtn-lbl">Skip</span>
+    </button>
   </section>
 
   <section id="chat" class="chat hidden">
