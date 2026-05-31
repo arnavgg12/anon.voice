@@ -222,10 +222,10 @@
       <div class="draw-toolbar">
         <div id="draw-palette" class="draw-palette" role="toolbar" aria-label="Colors"></div>
         <label class="draw-size" title="Brush size">
-          <input type="range" id="draw-size" min="2" max="32" value="4">
           <span id="draw-size-dot" class="draw-size-dot" aria-hidden="true"></span>
+          <input type="range" id="draw-size" min="2" max="32" value="4">
         </label>
-        <button id="draw-clear" class="ghost" disabled>Clear</button>
+        <button id="draw-clear" class="draw-clear" title="Clear canvas" aria-label="Clear canvas" disabled>🗑</button>
       </div>
       <div class="draw-wrap">
         <canvas id="draw-canvas"></canvas>

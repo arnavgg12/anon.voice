@@ -537,19 +537,23 @@ button:focus-visible, .tab:focus-visible, a:focus-visible { outline: 2px solid v
 .db-box.p2 { fill: var(--online); }
 
 /* Draw */
-.draw-toolbar { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-.draw-palette { display: flex; gap: 6px; align-items: center; }
-.swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--border); background: var(--swatch-color, var(--accent)); cursor: pointer; padding: 0; transition: transform .1s; }
-.swatch.active { border-color: var(--fg); transform: scale(1.15); }
+/* Single-row toolbar: colours · size · clear — never wraps. */
+.draw-toolbar { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--border); flex-wrap: nowrap; }
+.draw-palette { display: flex; gap: 5px; align-items: center; flex: 0 0 auto; }
+.swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--border); background: var(--swatch-color, var(--accent)); cursor: pointer; padding: 0; transition: transform .1s; flex: none; }
+.swatch.active { border-color: var(--fg); transform: scale(1.18); }
 .swatch.eraser { background: var(--surface-2); border: 2px dashed var(--border-2); display: inline-flex; align-items: center; justify-content: center; }
-.swatch.eraser::after { content: '⌫'; font-size: 13px; color: var(--muted); }
+.swatch.eraser::after { content: '⌫'; font-size: 11px; color: var(--muted); }
 .swatch.eraser.active::after { color: var(--fg); }
-.draw-size { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 90px; }
+.draw-size { display: flex; align-items: center; gap: 7px; flex: 1 1 auto; min-width: 56px; }
 .draw-size input[type="range"] { flex: 1; -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px; background: var(--border-2); outline: none; cursor: pointer; }
 .draw-size input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); cursor: pointer; }
 .draw-size input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: none; border-radius: 50%; background: var(--accent); cursor: pointer; }
-.draw-size-dot { width: 32px; display: flex; align-items: center; justify-content: center; flex: none; }
+.draw-size-dot { width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; flex: none; }
 .draw-size-dot::after { content: ''; width: var(--dot, 6px); height: var(--dot, 6px); border-radius: 50%; background: var(--fg); }
+.draw-clear { flex: none; width: 34px; height: 34px; padding: 0; border-radius: 50%; font-size: 15px; background: var(--surface); border: 1px solid var(--border-2); color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.draw-clear:hover:not(:disabled) { color: var(--danger); border-color: var(--danger); }
+.draw-clear:disabled { opacity: 0.4; cursor: default; }
 .draw-wrap { flex: 1 1 auto; min-height: 0; position: relative; padding: 8px; overflow: hidden; }
 /* JS sets the canvas's exact pixel display size (style.width/height) and backing
    store from the wrap's measured size, so CSS must NOT try to size it (no %,
