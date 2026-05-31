@@ -47,14 +47,69 @@ const io = new Server(server);
 // Waiting pools per mode. Each entry: { socket, interest, since }.
 // Interest-aware matching: prefer someone who shares an interest tag; after a
 // short grace window, fall back to anyone so nobody waits forever.
-const waiting = { voice: [], text: [] };
-const INTEREST_GRACE_MS = 6000;  // try hard to interest-match for the first 6s
+const pools = { voice: [], text: [] };
+const GRACE_MS = 4000;       // try hard to interest-match for the first 4s
 const partners = new Map();
 
-let icebreakerCounter = 1;  // monotonic seed so matched pairs share a prompt index
+let matchSeed = 1;           // monotonic seed so matched pairs share a prompt index
 const ROOMS = new Set(['lounge', 'chill']);
 const ROOM_CAP = 5;
 let reportCount = 0;
+
+function removeFromPools(socketId) {
+  for (const m of Object.keys(pools)) {
+    pools[m] = pools[m].filter((e) => e.socket.id !== socketId);
+  }
+}
+
+// Best waiting partner for `me`: same interest first, then either-"any",
+// then (only past the grace window) literally anyone still waiting.
+function pickPartner(pool, me) {
+  const now = Date.now();
+  let best = pool.find((e) => e.socket.connected && e.interest === me.interest && me.interest !== 'any');
+  if (!best) best = pool.find((e) => e.socket.connected && (e.interest === 'any' || me.interest === 'any'));
+  if (!best) best = pool.find((e) => e.socket.connected && (now - e.since) > GRACE_MS);
+  return best || null;
+}
+
+function emitMatch(aSock, bSock, mode, interestA, interestB) {
+  partners.set(aSock.id, bSock.id);
+  partners.set(bSock.id, aSock.id);
+  const seed = matchSeed++;
+  const shared = (interestA && interestA !== 'any') ? interestA
+               : (interestB && interestB !== 'any') ? interestB : 'any';
+  aSock.emit('matched', { initiator: true,  peerId: bSock.id, mode, seed, sharedInterest: shared });
+  bSock.emit('matched', { initiator: false, peerId: aSock.id, mode, seed, sharedInterest: shared });
+}
+
+// Sweep: pair anyone still waiting EVEN WITH NO NEW ARRIVALS. Without this,
+// two people who picked different interests would wait forever, since matching
+// otherwise only runs when a new person calls find-partner.
+function sweepPools() {
+  const now = Date.now();
+  for (const mode of Object.keys(pools)) {
+    let pool = pools[mode].filter((e) => e.socket.connected);
+    pool.sort((a, b) => a.since - b.since);
+    const used = new Set();
+    for (let i = 0; i < pool.length; i++) {
+      if (used.has(i)) continue;
+      const me = pool[i];
+      let j = -1;
+      for (let k = i + 1; k < pool.length; k++) {
+        if (!used.has(k) && pool[k].interest === me.interest && me.interest !== 'any') { j = k; break; }
+      }
+      if (j === -1) for (let k = i + 1; k < pool.length; k++) {
+        if (!used.has(k) && (pool[k].interest === 'any' || me.interest === 'any')) { j = k; break; }
+      }
+      if (j === -1 && (now - me.since) > GRACE_MS) {
+        for (let k = i + 1; k < pool.length; k++) { if (!used.has(k)) { j = k; break; } }
+      }
+      if (j !== -1) { used.add(i); used.add(j); emitMatch(me.socket, pool[j].socket, mode, me.interest, pool[j].interest); }
+    }
+    pools[mode] = pool.filter((_, idx) => !used.has(idx));
+  }
+}
+setInterval(sweepPools, 1500);
 
 // Friends / presence (in-memory; friend lists themselves live in each client's
 // localStorage — the server only knows who is online right now).
@@ -133,22 +188,13 @@ io.on('connection', (socket) => {
 
     if (match) {
       pools[mode] = pool.filter((e) => e.socket.id !== match.socket.id);
-      const partner = match.socket;
-      partners.set(socket.id, partner.id);
-      partners.set(partner.id, socket.id);
-      const seed = matchSeed++;                         // shared icebreaker seed
-      const shared = (interest !== 'any') ? interest : (match.interest !== 'any' ? match.interest : 'any');
-      socket.emit('matched',  { initiator: true,  peerId: partner.id, mode, seed, sharedInterest: shared });
-      partner.emit('matched', { initiator: false, peerId: socket.id, mode, seed, sharedInterest: shared });
+      emitMatch(socket, match.socket, mode, interest, match.interest);
     } else {
       pool.push(me);
       socket.emit('waiting', { mode, interest });
     }
   });
 
-  // Periodically flush long-waiters into any-match within their mode.
-  // (Handled lazily by pickPartner's fallback window on the next find-partner;
-  // no timer needed for an MVP — new arrivals drive matching.)
 
   socket.on('report', () => {
     reportCount++;
@@ -260,7 +306,22 @@ io.on('connection', (socket) => {
   });
 });
 
+// Lightweight health endpoint for keepalive pings + uptime checks.
+app.get('/healthz', (_req, res) => res.type('text').send('ok'));
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Voice chat server listening on http://localhost:${PORT}`);
 });
+
+// Keep the free Render instance awake: ping our own public URL every 10 min so
+// it doesn't sleep after 15 min idle (which caused "can't be reached" on refresh).
+const SELF_URL = process.env.RENDER_EXTERNAL_URL;
+if (SELF_URL) {
+  setInterval(() => {
+    const https = require('https');
+    https.get(SELF_URL + '/healthz', (r) => { r.resume(); })
+      .on('error', () => {});
+  }, 10 * 60 * 1000);
+  console.log(`Keepalive enabled for ${SELF_URL}`);
+}
