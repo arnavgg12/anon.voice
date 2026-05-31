@@ -53,7 +53,6 @@ const dbNewBtn = document.getElementById('db-new');
 const drawCanvasEl = document.getElementById('draw-canvas');
 const drawPaletteEl = document.getElementById('draw-palette');
 const drawClearBtn = document.getElementById('draw-clear');
-const drawColorEl = document.getElementById('draw-color');
 const drawSizeEl = document.getElementById('draw-size');
 const drawSizeDotEl = document.getElementById('draw-size-dot');
 const statusEl = document.getElementById('status');
@@ -519,15 +518,14 @@ function setupDrawingPanel() {
   });
   // Brush size from the slider, applied to whatever color is active.
   function applySize() {
-    const w = parseInt(drawSizeEl.value, 10) || 3;
+    const w = parseInt(drawSizeEl.value, 10) || 4;
     drawApi.setWidth(w);
     drawSizeDotEl.style.setProperty('--dot', Math.min(w, 26) + 'px');
   }
 
-  // Selecting a preset swatch or the eraser. Clears the custom-picker ring.
+  // Selecting a preset swatch or the eraser.
   function selectColor(color, swatchBtn) {
     drawPaletteEl.querySelectorAll('.swatch').forEach((b) => b.classList.remove('active'));
-    document.querySelector('.draw-picker').classList.remove('active');
     if (swatchBtn) swatchBtn.classList.add('active');
     drawApi.setColor(color);
   }
@@ -537,17 +535,10 @@ function setupDrawingPanel() {
   colors.forEach((color, i) => {
     const btn = document.createElement('button');
     btn.className = 'swatch' + (i === 0 ? ' active' : '') + (color === Draw.ERASER ? ' eraser' : '');
-    btn.style.setProperty('--swatch-color', color);
+    btn.style.setProperty('--swatch-color', color === Draw.ERASER ? 'transparent' : color);
     btn.setAttribute('aria-label', color === Draw.ERASER ? 'Eraser' : 'Color ' + color);
     btn.addEventListener('click', () => selectColor(color, btn));
     drawPaletteEl.appendChild(btn);
-  });
-
-  // Custom color picker.
-  drawColorEl.addEventListener('input', () => {
-    drawPaletteEl.querySelectorAll('.swatch').forEach((b) => b.classList.remove('active'));
-    document.querySelector('.draw-picker').classList.add('active');
-    drawApi.setColor(drawColorEl.value);
   });
 
   // Brush size slider.

@@ -515,13 +515,11 @@ button:focus-visible, .tab:focus-visible, a:focus-visible { outline: 2px solid v
 /* Draw */
 .draw-toolbar { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .draw-palette { display: flex; gap: 6px; align-items: center; }
-.swatch { width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent; background: var(--swatch-color, var(--accent)); cursor: pointer; padding: 0; }
-.swatch.eraser { background: linear-gradient(45deg, transparent 47%, var(--danger) 47%, var(--danger) 53%, transparent 53%), var(--surface-2); border: 2px solid var(--border-2); }
-.swatch.active { border-color: var(--fg); transform: scale(1.12); }
-.draw-picker { position: relative; width: 26px; height: 26px; cursor: pointer; flex: none; }
-.draw-picker input[type="color"] { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: none; border-radius: 50%; background: none; cursor: pointer; opacity: 0; }
-.draw-picker-ring { position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(red,#ff0,#0f0,#0ff,#00f,#f0f,red); border: 2px solid var(--border-2); pointer-events: none; }
-.draw-picker.active .draw-picker-ring { border-color: var(--fg); }
+.swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--border); background: var(--swatch-color, var(--accent)); cursor: pointer; padding: 0; transition: transform .1s; }
+.swatch.active { border-color: var(--fg); transform: scale(1.15); }
+.swatch.eraser { background: var(--surface-2); border: 2px dashed var(--border-2); display: inline-flex; align-items: center; justify-content: center; }
+.swatch.eraser::after { content: '⌫'; font-size: 13px; color: var(--muted); }
+.swatch.eraser.active::after { color: var(--fg); }
 .draw-size { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 90px; }
 .draw-size input[type="range"] { flex: 1; -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px; background: var(--border-2); outline: none; cursor: pointer; }
 .draw-size input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); cursor: pointer; }
