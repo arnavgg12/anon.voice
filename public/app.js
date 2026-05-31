@@ -343,10 +343,7 @@ function applyMute() {
   if (localStream) {
     localStream.getAudioTracks().forEach((t) => (t.enabled = !isMuted));
   }
-  const ico = muteBtn.querySelector('.callbtn-ico');
-  const lbl = muteBtn.querySelector('.callbtn-lbl');
-  if (ico) ico.textContent = isMuted ? '🔇' : '🎤';
-  if (lbl) lbl.textContent = isMuted ? 'Unmute' : 'Mute';
+  muteBtn.textContent = isMuted ? 'Unmute' : 'Mute';
   muteBtn.classList.toggle('muted', isMuted);
 }
 
