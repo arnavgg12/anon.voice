@@ -20,21 +20,25 @@ function setupDraw(canvas, opts) {
   // Returns true if the canvas is visible/laid-out (so callers can lazily
   // size on first use — robust against tab-visibility timing).
   function ensureSized() {
-    // Measure the PARENT wrap, not the canvas. The canvas's width/height
-    // attributes (backing store) would otherwise feed back into its own
-    // absolute box and cause a runaway. The wrap has a stable layout size.
+    // Measure the PARENT wrap (stable layout box), not the canvas — the canvas
+    // is a REPLACED element, so its width/height attributes become its intrinsic
+    // CSS size; reading its own rect would feed the backing store back into the
+    // display box (runaway). We set BOTH the CSS display size (style.width/height)
+    // AND the backing store (width/height attrs = css × dpr) so they're fully
+    // decoupled — the canonical HiDPI-canvas setup.
     const host = canvas.parentElement || canvas;
     const rect = host.getBoundingClientRect();
-    const pad = 8; // matches .draw-wrap padding / canvas inset
-    const w = Math.max(0, rect.width  - pad * 2);
-    const h = Math.max(0, rect.height - pad * 2);
+    const pad = 8; // matches .draw-wrap padding
+    const w = Math.max(0, Math.round(rect.width  - pad * 2));
+    const h = Math.max(0, Math.round(rect.height - pad * 2));
     if (!w || !h) return false;
     const dpr = window.devicePixelRatio || 1;
-    const wantW = Math.round(w * dpr);
-    const wantH = Math.round(h * dpr);
-    if (canvas.width !== wantW || canvas.height !== wantH || cssW !== w) {
+    if (cssW !== w || cssH !== h) {
       cssW = w; cssH = h;
-      canvas.width = wantW; canvas.height = wantH;
+      canvas.style.width = w + 'px';     // CSS display size — fixes the offset
+      canvas.style.height = h + 'px';
+      canvas.width = Math.round(w * dpr);  // backing store
+      canvas.height = Math.round(h * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);   // 1 unit = 1 CSS px
       repaint();
     }
