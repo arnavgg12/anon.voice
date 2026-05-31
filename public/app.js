@@ -399,7 +399,7 @@ function setupChatChannel(channel) {
         refreshOrb();          // repaint orb + name with the REAL shared identity
         // Re-sync the status line now that we know the real name.
         if (pc && pc.connectionState === 'connected') {
-          setStatus(textOnly ? `Connected with ${partnerName()} — start typing.` : `Connected with ${partnerName()}.`, 'live');
+          setStatus(textOnly ? 'Connected · start typing' : 'Connected · say hi 👋', 'live');
         }
         announcePartner();     // "You're now talking with X" — same name both sides
         const known = loadFriends().some((f) => f.id === partnerGuestId);
@@ -803,7 +803,7 @@ function createPeer(initiator, withAudio) {
     if (!pc) return;
     if (pc.connectionState === 'connected') {
       clearTimeout(iceRestartTimer);
-      setStatus(textOnly ? `Connected with ${partnerName()} — start typing.` : `Connected with ${partnerName()}.`, 'live');
+      setStatus(textOnly ? 'Connected · start typing' : 'Connected · say hi 👋', 'live');
     } else if (pc.connectionState === 'failed') {
       // Last resort: full restart attempt; if that can't run, surface it.
       restartIce();
