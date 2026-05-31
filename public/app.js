@@ -401,6 +401,16 @@ function appendMessage(text, who) {
   div.textContent = clean(text);
   messagesEl.appendChild(div);
   messagesEl.scrollTop = messagesEl.scrollHeight;
+  // Unread badge: a real incoming message while the user is on another tab.
+  if (who === 'them' && activeTabName() !== 'chat') {
+    const chatTab = document.querySelector('.tab[data-tab="chat"]');
+    if (chatTab) chatTab.classList.add('has-notif');
+  }
+}
+
+function activeTabName() {
+  const t = document.querySelector('.tab.active');
+  return t ? t.dataset.tab : 'chat';
 }
 
 function appendSystem(text) { appendMessage(text, 'system'); }
@@ -584,9 +594,16 @@ function startGame(seed, broadcast) {
 function switchTab(name) {
   tabs.forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
   panels.forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== name));
-  if (name === 'draw' && drawApi) {
-    requestAnimationFrame(() => drawApi.redrawAll());
+  // Clear the unread badge when the user lands on Chat.
+  if (name === 'chat') {
+    const chatTab = document.querySelector('.tab[data-tab="chat"]');
+    if (chatTab) chatTab.classList.remove('has-notif');
   }
+  // Focus mode: on a game/canvas tab, shrink the orb/identity/controls so the
+  // activity gets nearly the whole screen. Restore on the chat tab.
+  appEl.classList.toggle('focus-mode', name !== 'chat');
+  // The canvas size changes when focus-mode toggles, so re-measure it next frame.
+  if (drawApi) requestAnimationFrame(() => drawApi.redrawAll());
 }
 
 function clearGame() {
@@ -1129,6 +1146,10 @@ socket.on('room-text', ({ from, text }) => {
   div.appendChild(document.createTextNode(clean(text)));
   messagesEl.appendChild(div);
   messagesEl.scrollTop = messagesEl.scrollHeight;
+  if (activeTabName() !== 'chat') {
+    const chatTab = document.querySelector('.tab[data-tab="chat"]');
+    if (chatTab) chatTab.classList.add('has-notif');
+  }
 });
 
 socket.on('lobby-counts', (counts) => {

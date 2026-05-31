@@ -355,6 +355,20 @@ a { color: inherit; }
 .controls { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 6px; flex: 0 0 auto; }
 .controls button.hidden { display: none; }
 
+/* ---- Focus mode: on a game/canvas tab, collapse the header so the activity
+   panel gets nearly the whole screen. Smooth-shrinks the orb + hides labels. ---- */
+#app.focus-mode .orb-wrap { margin: 4px 0; gap: 0; }
+#app.focus-mode .orb { width: 40px; height: 40px; font-size: 22px; }
+#app.focus-mode .orb::before { display: none; }
+#app.focus-mode .partner-name { display: none; }
+#app.focus-mode .status { display: none; }
+#app.focus-mode .controls { margin-top: 4px; }
+/* compact the top bar: keep the avatar, drop the name + nudge buttons smaller */
+#app.focus-mode .id-name { display: none; }
+#app.focus-mode .app-bar { margin-bottom: 0; }
+/* the chat/activity panel expands to fill the reclaimed space */
+#app.focus-mode .chat { margin-top: 8px; }
+
 button {
   font-family: inherit; padding: 13px 26px; border-radius: var(--r-pill);
   border: 1px solid var(--border-2); background: var(--surface); color: var(--fg);
@@ -391,6 +405,7 @@ button:focus-visible, .tab:focus-visible, a:focus-visible { outline: 2px solid v
 .tabs { display: flex; gap: 2px; padding: 8px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
 .tab {
+  position: relative;
   flex: 1 0 auto; background: transparent; border: none; border-radius: 12px;
   padding: 9px 10px; color: var(--muted); font-size: 19px; line-height: 1;
   cursor: pointer; opacity: 0.55; transition: opacity .15s, background .15s;
@@ -398,6 +413,15 @@ button:focus-visible, .tab:focus-visible, a:focus-visible { outline: 2px solid v
 }
 .tab:hover:not(.active) { opacity: 0.85; }
 .tab.active { opacity: 1; background: rgba(124,108,255,0.16); }
+/* Unread-message dot on the chat tab */
+.tab.has-notif::after {
+  content: ''; position: absolute; top: 5px; right: 7px;
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--pink); border: 2px solid var(--bg);
+  box-shadow: 0 0 6px var(--pink);
+  animation: notifpop .25s ease;
+}
+@keyframes notifpop { from { transform: scale(0); } to { transform: scale(1); } }
 
 .tab-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 
