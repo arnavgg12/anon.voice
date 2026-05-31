@@ -37,6 +37,7 @@ const panels = document.querySelectorAll('.tab-panel');
 const boardEl = document.getElementById('board');
 const gameStatusEl = document.getElementById('game-status');
 const gameNewBtn = document.getElementById('game-new');
+const mineFlagBtn = document.getElementById('mine-flag');
 const sudokuGridEl = document.getElementById('sudoku-grid');
 const sudokuStatusEl = document.getElementById('sudoku-status');
 const sudokuNewBtn = document.getElementById('sudoku-new');
@@ -92,6 +93,7 @@ let lastInitiator = false;
 let lastWithAudio = false;
 let chatChannel = null;
 let board = null;
+let mineFlagMode = false;
 let sudokuState = null;
 let c4State = null;
 let tttState = null;
@@ -435,6 +437,7 @@ function setupChatChannel(channel) {
     chatInput.disabled = false;
     chatSend.disabled = false;
     gameNewBtn.disabled = false;
+    mineFlagBtn.disabled = false;
     sudokuNewBtn.disabled = false;
     c4NewBtn.disabled = false;
     tttNewBtn.disabled = false;
@@ -511,6 +514,7 @@ function setupChatChannel(channel) {
     chatInput.disabled = true;
     chatSend.disabled = true;
     gameNewBtn.disabled = true;
+    mineFlagBtn.disabled = true;
     sudokuNewBtn.disabled = true;
     c4NewBtn.disabled = true;
     tttNewBtn.disabled = true;
@@ -569,14 +573,15 @@ setupDrawingPanel();
 function renderGame() {
   if (!board) return;
   Minesweeper.renderBoard(board, boardEl, gameStatusEl, {
+    flagMode: mineFlagMode,
     onReveal: (x, y) => {
-      if (!board || board.gameOver) return;
+      if (!board || board.over) return;
       Minesweeper.revealCell(board, x, y);
       sendOverChannel({ type: 'reveal', x, y });
       renderGame();
     },
     onFlag: (x, y) => {
-      if (!board || board.gameOver) return;
+      if (!board || board.over) return;
       Minesweeper.toggleFlag(board, x, y);
       sendOverChannel({ type: 'flag', x, y });
       renderGame();
@@ -584,9 +589,18 @@ function renderGame() {
   });
 }
 
+function setFlagMode(on) {
+  mineFlagMode = on;
+  if (mineFlagBtn) {
+    mineFlagBtn.classList.toggle('active', on);
+    mineFlagBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
+  renderGame();
+}
+
 function startGame(seed, broadcast) {
   board = Minesweeper.buildBoard(seed);
-  renderGame();
+  setFlagMode(false);
   switchTab('mines');
   if (broadcast) sendOverChannel({ type: 'game-start', seed });
 }
@@ -608,8 +622,10 @@ function switchTab(name) {
 
 function clearGame() {
   board = null;
+  mineFlagMode = false;
+  if (mineFlagBtn) { mineFlagBtn.classList.remove('active'); mineFlagBtn.setAttribute('aria-pressed', 'false'); }
   boardEl.innerHTML = '';
-  gameStatusEl.textContent = 'Click "New game" to start.';
+  gameStatusEl.textContent = 'Tap “New game” to start.';
   clearSudoku();
   clearConnect4();
 }
@@ -1327,6 +1343,10 @@ tabs.forEach((tab) => tab.addEventListener('click', () => switchTab(tab.dataset.
 gameNewBtn.addEventListener('click', () => {
   if (!chatChannel || chatChannel.readyState !== 'open') return;
   startGame((Math.random() * 0x7fffffff) | 0, true);
+});
+mineFlagBtn.addEventListener('click', () => {
+  if (!board || board.over) return;
+  setFlagMode(!mineFlagMode);
 });
 sudokuNewBtn.addEventListener('click', () => {
   if (!chatChannel || chatChannel.readyState !== 'open') return;
