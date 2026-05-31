@@ -526,8 +526,11 @@ button:focus-visible, .tab:focus-visible, a:focus-visible { outline: 2px solid v
 .draw-size input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: none; border-radius: 50%; background: var(--accent); cursor: pointer; }
 .draw-size-dot { width: 32px; display: flex; align-items: center; justify-content: center; flex: none; }
 .draw-size-dot::after { content: ''; width: var(--dot, 6px); height: var(--dot, 6px); border-radius: 50%; background: var(--fg); }
-.draw-wrap { flex: 1 1 auto; min-height: 0; position: relative; padding: 8px; }
-#draw-canvas { position: absolute; inset: 8px; width: auto; height: auto; background: rgba(0,0,0,0.25); border-radius: var(--r-sm); cursor: crosshair; touch-action: none; }
+.draw-wrap { flex: 1 1 auto; min-height: 0; position: relative; padding: 8px; overflow: hidden; }
+/* Canvas fills the wrap via absolute inset (which DOES give a definite height,
+   unlike percentage height on a flex child). JS sets the backing store from the
+   wrap's measured size, so there is no self-feedback loop. */
+#draw-canvas { position: absolute; inset: 8px; display: block; background: rgba(0,0,0,0.25); border-radius: var(--r-sm); cursor: crosshair; touch-action: none; }
 
 /* ============================================================
    FRIENDS
