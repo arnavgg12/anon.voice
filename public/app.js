@@ -11,7 +11,6 @@ const heroOnlineEl = document.getElementById('hero-online');
 const skipBtn = document.getElementById('skip');
 const muteBtn = document.getElementById('mute');
 const reportBtn = document.getElementById('report');
-const leaveBtn = document.getElementById('leave');
 const addFriendBtn = document.getElementById('add-friend');
 
 // ---- Friends ----
@@ -54,6 +53,9 @@ const dbNewBtn = document.getElementById('db-new');
 const drawCanvasEl = document.getElementById('draw-canvas');
 const drawPaletteEl = document.getElementById('draw-palette');
 const drawClearBtn = document.getElementById('draw-clear');
+const drawColorEl = document.getElementById('draw-color');
+const drawSizeEl = document.getElementById('draw-size');
+const drawSizeDotEl = document.getElementById('draw-size-dot');
 const statusEl = document.getElementById('status');
 const orbEl = document.getElementById('orb');
 const remoteAudio = document.getElementById('remote-audio');
@@ -212,7 +214,8 @@ function resetFriendButton() {
   iSentFriendReq = false;
   peerSentFriendReq = false;
   partnerGuestId = null;
-  addFriendBtn.textContent = '＋ Add friend';
+  addFriendBtn.textContent = '＋';
+  addFriendBtn.title = 'Add friend';
   addFriendBtn.classList.remove('added');
   addFriendBtn.disabled = true;
 }
@@ -220,7 +223,8 @@ function resetFriendButton() {
 function maybeMutualFriend() {
   if (iSentFriendReq && peerSentFriendReq && partnerGuestId && partnerIdentity) {
     addFriendRecord(partnerGuestId, partnerIdentity.name, partnerIdentity.emoji);
-    addFriendBtn.textContent = '✓ Friends';
+    addFriendBtn.textContent = '✓';
+    addFriendBtn.title = 'Friends';
     addFriendBtn.classList.add('added');
     addFriendBtn.disabled = true;
     appendSystem(`You're now friends with ${partnerIdentity.emoji} ${partnerIdentity.name}. Find each other from the home screen.`);
@@ -347,7 +351,8 @@ function setupChatChannel(channel) {
         partnerIdentity = Identity.identityForId(msg.guestId);
         const known = loadFriends().some((f) => f.id === partnerGuestId);
         if (known) {
-          addFriendBtn.textContent = '✓ Friends';
+          addFriendBtn.textContent = '✓';
+          addFriendBtn.title = 'Friends';
           addFriendBtn.classList.add('added');
           addFriendBtn.disabled = true;
         }
@@ -407,6 +412,21 @@ function setupDrawingPanel() {
       sendOverChannel({ type: 'draw-seg', x1, y1, x2, y2, color, width });
     },
   });
+  // Brush size from the slider, applied to whatever color is active.
+  function applySize() {
+    const w = parseInt(drawSizeEl.value, 10) || 3;
+    drawApi.setWidth(w);
+    drawSizeDotEl.style.setProperty('--dot', Math.min(w, 26) + 'px');
+  }
+
+  // Selecting a preset swatch or the eraser. Clears the custom-picker ring.
+  function selectColor(color, swatchBtn) {
+    drawPaletteEl.querySelectorAll('.swatch').forEach((b) => b.classList.remove('active'));
+    document.querySelector('.draw-picker').classList.remove('active');
+    if (swatchBtn) swatchBtn.classList.add('active');
+    drawApi.setColor(color);
+  }
+
   drawPaletteEl.innerHTML = '';
   const colors = [...Draw.COLORS, Draw.ERASER];
   colors.forEach((color, i) => {
@@ -414,14 +434,21 @@ function setupDrawingPanel() {
     btn.className = 'swatch' + (i === 0 ? ' active' : '') + (color === Draw.ERASER ? ' eraser' : '');
     btn.style.setProperty('--swatch-color', color);
     btn.setAttribute('aria-label', color === Draw.ERASER ? 'Eraser' : 'Color ' + color);
-    btn.addEventListener('click', () => {
-      drawPaletteEl.querySelectorAll('.swatch').forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
-      drawApi.setColor(color);
-      drawApi.setWidth(color === Draw.ERASER ? 14 : 3);
-    });
+    btn.addEventListener('click', () => selectColor(color, btn));
     drawPaletteEl.appendChild(btn);
   });
+
+  // Custom color picker.
+  drawColorEl.addEventListener('input', () => {
+    drawPaletteEl.querySelectorAll('.swatch').forEach((b) => b.classList.remove('active'));
+    document.querySelector('.draw-picker').classList.add('active');
+    drawApi.setColor(drawColorEl.value);
+  });
+
+  // Brush size slider.
+  drawSizeEl.addEventListener('input', applySize);
+
+  applySize();
 }
 
 drawClearBtn.addEventListener('click', () => {
@@ -1045,7 +1072,6 @@ document.querySelectorAll('[data-room]').forEach((btn) => {
 });
 
 goHomeBtn.addEventListener('click', () => { if (pendingCallTo) socket.emit('cancel-call', { toGuestId: pendingCallTo }); goHome(); });
-leaveBtn.addEventListener('click', () => { if (pendingCallTo) socket.emit('cancel-call', { toGuestId: pendingCallTo }); goHome(); });
 
 muteBtn.addEventListener('click', () => { isMuted = !isMuted; applyMute(); });
 
@@ -1056,9 +1082,10 @@ addFriendBtn.addEventListener('click', () => {
   if (peerSentFriendReq) {
     maybeMutualFriend();
   } else {
-    addFriendBtn.textContent = 'Requested…';
+    addFriendBtn.textContent = '⏳';
+    addFriendBtn.title = 'Friend request sent';
     addFriendBtn.disabled = true;
-    appendSystem('Friend request sent — they need to tap "Add friend" too.');
+    appendSystem('Friend request sent — they need to tap ＋ too.');
   }
 });
 

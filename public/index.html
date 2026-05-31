@@ -120,9 +120,11 @@
 <!-- ===================== APP ===================== -->
 <main id="app" class="app-hidden">
   <div class="app-bar">
-    <button id="go-home" class="iconbtn" title="Home" aria-label="Back to home">←</button>
+    <button id="go-home" class="iconbtn" title="Leave chat" aria-label="Leave chat">←</button>
     <div id="self-identity" class="self-identity"></div>
     <div class="app-bar-spacer"></div>
+    <button id="add-friend" class="iconbtn hidden" title="Add friend" aria-label="Add friend" disabled>＋</button>
+    <button id="report" class="iconbtn hidden" title="Report &amp; skip" aria-label="Report and skip" disabled>⚑</button>
   </div>
 
   <section class="orb-wrap">
@@ -131,11 +133,8 @@
   </section>
 
   <section class="controls">
-    <button id="skip" class="primary" disabled>Skip</button>
-    <button id="mute" disabled>Mute</button>
-    <button id="add-friend" class="ghost hidden" disabled>＋ Add friend</button>
-    <button id="report" class="ghost" disabled>Report</button>
-    <button id="leave" class="danger">Leave</button>
+    <button id="skip" class="primary hidden" disabled>Skip ⏭</button>
+    <button id="mute" class="hidden" disabled>Mute</button>
   </section>
 
   <section id="chat" class="chat hidden">
@@ -211,8 +210,16 @@
     </div>
 
     <div class="tab-panel hidden" data-panel="draw">
-      <div class="game-bar">
-        <div id="draw-palette" class="draw-palette" role="toolbar" aria-label="Drawing tools"></div>
+      <div class="draw-toolbar">
+        <div id="draw-palette" class="draw-palette" role="toolbar" aria-label="Colors"></div>
+        <label class="draw-picker" title="Pick a color">
+          <input type="color" id="draw-color" value="#6c8eff">
+          <span class="draw-picker-ring" aria-hidden="true"></span>
+        </label>
+        <label class="draw-size" title="Brush size">
+          <input type="range" id="draw-size" min="1" max="32" value="3">
+          <span id="draw-size-dot" class="draw-size-dot" aria-hidden="true"></span>
+        </label>
         <button id="draw-clear" class="ghost" disabled>Clear</button>
       </div>
       <div class="draw-wrap">
