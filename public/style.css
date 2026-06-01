@@ -353,6 +353,22 @@ a { color: inherit; }
 .partner-name.hidden { display: none; }
 .status { color: var(--muted); font-size: 14px; min-height: 20px; }
 
+/* Live audio-flow indicator — shows whether voice is actually moving each way */
+.audio-flow { display: flex; gap: 8px; justify-content: center; margin-top: 4px; }
+.audio-flow.hidden { display: none; }
+.flow-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11.5px; color: var(--faint); font-weight: 500;
+  background: var(--surface); border: 1px solid var(--border);
+  padding: 4px 10px; border-radius: var(--r-pill);
+  transition: color .2s, border-color .2s;
+}
+.flow-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); transition: background .2s, box-shadow .2s; }
+.flow-pill.flowing { color: var(--online); border-color: rgba(79,224,154,0.35); }
+.flow-pill.flowing .flow-dot { background: var(--online); box-shadow: 0 0 6px var(--online); animation: flowpulse 1.2s ease-in-out infinite; }
+@keyframes flowpulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
+#app.focus-mode .audio-flow { display: none; }
+
 /* ----- Controls (Skip / Mute) ----- */
 /* Call-style circular controls (replaces the old oval pills) */
 .controls { display: flex; gap: 26px; justify-content: center; align-items: flex-start; margin-top: 10px; flex: 0 0 auto; }

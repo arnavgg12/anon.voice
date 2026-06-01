@@ -64,6 +64,9 @@ const statusEl = document.getElementById('status');
 const orbEl = document.getElementById('orb');
 const remoteAudio = document.getElementById('remote-audio');
 const partnerNameEl = document.getElementById('partner-name');
+const audioFlowEl = document.getElementById('audio-flow');
+const flowOutEl = document.getElementById('flow-out');
+const flowInEl = document.getElementById('flow-in');
 const interestChipsEl = document.getElementById('interest-chips');
 const icebreakerEl = document.getElementById('icebreaker');
 const icebreakerTextEl = document.getElementById('icebreaker-text');
@@ -95,6 +98,7 @@ let isMuted = false;
 let iceRestartTimer = null;
 let lastInitiator = false;
 let lastWithAudio = false;
+let peerWasConnected = false;   // did this peer ever reach 'connected'? (for sounds)
 let chatChannel = null;
 let board = null;
 let mineFlagMode = false;
@@ -134,6 +138,42 @@ let selfAnalyser = null;
 let selfData = null;
 let sharedAudioCtx = null;
 let activityRafId = null;
+let flowTimer = null;            // WebRTC-stats poller for the audio indicator
+let flowPrev = { out: 0, in: 0 };
+
+// Live audio-flow indicator: polls getStats() to show whether voice bytes are
+// actually moving each direction, so a silent call is instantly diagnosable.
+function startAudioFlow() {
+  if (!audioFlowEl) return;
+  audioFlowEl.classList.remove('hidden');
+  setFlow(flowOutEl, false);
+  setFlow(flowInEl, false);
+  flowPrev = { out: 0, in: 0 };
+  clearInterval(flowTimer);
+  flowTimer = setInterval(pollAudioFlow, 1500);
+}
+function stopAudioFlow() {
+  clearInterval(flowTimer);
+  flowTimer = null;
+  if (audioFlowEl) audioFlowEl.classList.add('hidden');
+}
+function setFlow(el, on) {
+  if (el) el.classList.toggle('flowing', on);
+}
+async function pollAudioFlow() {
+  if (!pc || pc.connectionState !== 'connected') return;
+  try {
+    const stats = await pc.getStats();
+    let outBytes = 0, inBytes = 0;
+    stats.forEach((r) => {
+      if (r.type === 'outbound-rtp' && r.kind === 'audio') outBytes += r.bytesSent || 0;
+      if (r.type === 'inbound-rtp' && r.kind === 'audio') inBytes += r.bytesReceived || 0;
+    });
+    setFlow(flowOutEl, outBytes > flowPrev.out);   // our mic is reaching them
+    setFlow(flowInEl, inBytes > flowPrev.in);      // we're receiving their audio
+    flowPrev = { out: outBytes, in: inBytes };
+  } catch { /* getStats unsupported — leave indicator as-is */ }
+}
 
 // ---------- profanity filter ----------
 const BAD_WORDS = ['fuck','shit','bitch','asshole','bastard','cunt','dick','slut','whore','nigger','faggot','retard'];
@@ -880,6 +920,7 @@ async function restartIce() {
 function createPeer(initiator, withAudio) {
   lastInitiator = initiator;
   lastWithAudio = withAudio;
+  peerWasConnected = false;
   pc = new RTCPeerConnection({ iceServers: ICE_SERVERS, iceCandidatePoolSize: 4 });
 
   if (withAudio && localStream) {
@@ -926,6 +967,11 @@ function createPeer(initiator, withAudio) {
     if (pc.connectionState === 'connected') {
       clearTimeout(iceRestartTimer);
       setStatus(textOnly ? 'Connected · start typing' : 'Connected · say hi 👋', 'live');
+      if (!peerWasConnected) {
+        peerWasConnected = true;
+        if (window.Sounds) Sounds.connected();        // chime on first connect
+        if (!textOnly) startAudioFlow();               // show live audio indicator
+      }
     } else if (pc.connectionState === 'failed') {
       // Last resort: full restart attempt; if that can't run, surface it.
       restartIce();
@@ -936,6 +982,11 @@ function createPeer(initiator, withAudio) {
 
 function teardownPeer() {
   clearTimeout(iceRestartTimer);
+  stopAudioFlow();
+  // Disconnect chime only if a call was actually established (not on a plain skip
+  // from the searching state, and not for text-only chats).
+  if (peerWasConnected && !textOnly && window.Sounds) Sounds.disconnected();
+  peerWasConnected = false;
   if (chatChannel) {
     try { chatChannel.close(); } catch {}
     chatChannel = null;
@@ -1317,10 +1368,10 @@ socket.on('partner-left', () => {
 
 // ---------- landing / control wiring ----------
 document.querySelectorAll('[data-start]').forEach((btn) => {
-  btn.addEventListener('click', () => startCall(btn.dataset.start === 'text'));
+  btn.addEventListener('click', () => { if (window.Sounds) Sounds.unlock(); startCall(btn.dataset.start === 'text'); });
 });
 document.querySelectorAll('[data-room]').forEach((btn) => {
-  if (btn.tagName === 'BUTTON') btn.addEventListener('click', () => joinRoom(btn.dataset.room));
+  if (btn.tagName === 'BUTTON') btn.addEventListener('click', () => { if (window.Sounds) Sounds.unlock(); joinRoom(btn.dataset.room); });
 });
 
 goHomeBtn.addEventListener('click', () => { if (pendingCallTo) socket.emit('cancel-call', { toGuestId: pendingCallTo }); goHome(); });

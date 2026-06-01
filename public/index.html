@@ -138,6 +138,10 @@
     <div id="orb" class="orb idle"></div>
     <h2 id="partner-name" class="partner-name"></h2>
     <p id="status" class="status" role="status" aria-live="polite">Connecting…</p>
+    <div id="audio-flow" class="audio-flow hidden" aria-live="polite">
+      <span class="flow-pill" id="flow-out"><span class="flow-dot"></span> Your mic</span>
+      <span class="flow-pill" id="flow-in"><span class="flow-dot"></span> Hearing them</span>
+    </div>
   </section>
 
   <section class="controls">
@@ -266,6 +270,7 @@
 <div class="watermark">AG</div>
 
 <script src="/socket.io/socket.io.js"></script>
+<script src="sounds.js"></script>
 <script src="identity.js"></script>
 <script src="prompts.js"></script>
 <script src="minesweeper.js"></script>
