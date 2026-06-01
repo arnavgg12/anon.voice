@@ -825,18 +825,43 @@ async function ensureMic() {
   }
 }
 
-// Enable Opus in-band FEC (forward error correction) + DTX so audio survives
-// packet loss and uses less bandwidth in silence — big win on weak connections.
+// Enable Opus in-band FEC (forward error correction) so audio survives packet
+// loss on weak connections. We ONLY touch the actual Opus payload's fmtp line —
+// the previous version matched any "/111/" which could corrupt a different
+// codec's line on browsers that assign Opus a non-111 payload, breaking audio
+// entirely ("connected but silent"). Fails safe: returns the SDP unchanged if
+// it can't confidently find Opus. DTX is intentionally NOT enabled — it can
+// clip the start of speech on some devices.
 function tuneAudioSdp(sdp) {
-  if (!sdp || !sdp.sdp) return sdp;
-  let s = sdp.sdp;
-  if (/useinbandfec=1/.test(s)) return sdp; // already tuned
-  s = s.replace(/(a=fmtp:\d+ [^\n]*)/g, (line) =>
-    /opus/i.test(line) || /111/.test(line)
-      ? line + ';useinbandfec=1;usedtx=1;maxaveragebitrate=24000'
-      : line
-  );
-  return new RTCSessionDescription({ type: sdp.type, sdp: s });
+  try {
+    if (!sdp || !sdp.sdp) return sdp;
+    const s = sdp.sdp;
+    // Find Opus's dynamic payload type from its rtpmap line.
+    const m = s.match(/a=rtpmap:(\d+)\s+opus\/48000/i);
+    if (!m) return sdp;                       // no Opus → leave SDP alone
+    const pt = m[1];
+    const lines = s.split(/\r?\n/);
+    let hasFmtp = false;
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].startsWith('a=fmtp:' + pt + ' ')) {
+        hasFmtp = true;
+        if (!/useinbandfec=1/.test(lines[i])) lines[i] += ';useinbandfec=1';
+      }
+    }
+    // If Opus had no fmtp line at all, add one right after its rtpmap.
+    if (!hasFmtp) {
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].startsWith('a=rtpmap:' + pt + ' opus')) {
+          lines.splice(i + 1, 0, 'a=fmtp:' + pt + ' useinbandfec=1');
+          break;
+        }
+      }
+    }
+    return new RTCSessionDescription({ type: sdp.type, sdp: lines.join('\r\n') });
+  } catch (err) {
+    console.warn('tuneAudioSdp skipped:', err);
+    return sdp;                               // never let SDP tuning break the call
+  }
 }
 
 function partnerName() {
@@ -867,7 +892,16 @@ function createPeer(initiator, withAudio) {
     pc.ondatachannel = (e) => setupChatChannel(e.channel);
   }
 
-  pc.ontrack = (e) => { remoteAudio.srcObject = e.streams[0]; };
+  pc.ontrack = (e) => {
+    remoteAudio.srcObject = e.streams[0];
+    remoteAudio.muted = false;
+    // Mobile browsers can silently block autoplay; nudge it and retry on the
+    // first user gesture if it's blocked.
+    const tryPlay = () => remoteAudio.play().catch(() => {});
+    tryPlay();
+    document.addEventListener('click', tryPlay, { once: true });
+    document.addEventListener('touchend', tryPlay, { once: true });
+  };
 
   pc.onicecandidate = (e) => {
     if (e.candidate) socket.emit('signal', { type: 'ice', candidate: e.candidate });
@@ -1086,6 +1120,8 @@ function createRoomPeer(peerId, initiator) {
       peerAudiosEl.appendChild(audio);
     }
     audio.srcObject = e.streams[0];
+    audio.muted = false;
+    audio.play().catch(() => {});
     attachPeerAnalyser(peerId, e.streams[0]);
   };
   peerPc.onicecandidate = (e) => {
@@ -1237,6 +1273,12 @@ async function handleMatch({ initiator, peerId, mode: matchedMode, seed, sharedI
   matchSeed = seed || 0;
   matchSharedInterest = sharedInterest || 'any';
   const withAudio = matchedMode !== 'text';
+  // Guarantee the mic is captured BEFORE we build the peer — otherwise we'd add
+  // no audio track and the partner would hear silence. (Normally ensured in
+  // startCall, but this protects the friend-call / re-match paths too.)
+  if (withAudio && !localStream) {
+    try { await ensureMic(); } catch { setStatus('Microphone blocked — they can’t hear you.', 'idle'); }
+  }
   createPeer(initiator, withAudio);
   if (initiator) {
     const offer = await pc.createOffer();
