@@ -352,14 +352,38 @@ a { color: inherit; }
 .status { color: var(--muted); font-size: 14px; min-height: 20px; }
 
 /* ----- Controls (Skip / Mute) ----- */
-.controls { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 6px; flex: 0 0 auto; }
-.controls button.hidden { display: none; }
+/* Call-style circular controls (replaces the old oval pills) */
+.controls { display: flex; gap: 26px; justify-content: center; align-items: flex-start; margin-top: 10px; flex: 0 0 auto; }
+.ctl { display: flex; flex-direction: column; align-items: center; gap: 7px; }
+.ctl.hidden { display: none; }
+.ctl-btn {
+  width: 60px; height: 60px; padding: 0; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 24px; line-height: 1; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--border-2); color: var(--fg);
+  transition: transform .12s, background .18s, border-color .18s, box-shadow .18s;
+}
+.ctl-btn:hover:not(:disabled) { background: var(--surface-2); transform: translateY(-2px); }
+.ctl-btn:active:not(:disabled) { transform: scale(0.94); }
+.ctl-btn:disabled { opacity: 0.4; cursor: default; }
+.ctl-label { font-size: 12px; color: var(--muted); font-weight: 500; letter-spacing: .2px; }
+/* Skip = the hero action: aurora-filled circle */
+.ctl-btn.ctl-accent {
+  background: var(--aurora); background-size: 160% 160%; border: none; color: #0a0a14;
+  box-shadow: 0 10px 26px -8px rgba(124,108,255,0.6);
+}
+.ctl-btn.ctl-accent:hover:not(:disabled) { background-position: 100% 0; box-shadow: 0 14px 34px -8px rgba(176,108,255,0.7); }
+/* Muted state: glass circle fills red (high specificity to beat base button rules) */
+.controls .ctl-btn.muted { background: var(--danger); border-color: var(--danger); color: #0a0a14; box-shadow: 0 8px 22px -8px rgba(255,107,125,0.6); }
+.controls .ctl-btn.muted:hover:not(:disabled) { background: #ff8593; }
 
 /* ---- Focus mode: on a game/canvas tab, collapse the header so the activity
    panel gets nearly the whole screen. The orb is dropped entirely (the partner
    avatar already lives in the top bar), removing the stray floating circle. ---- */
 #app.focus-mode .orb-wrap { display: none; }
-#app.focus-mode .controls { margin-top: 0; }
+#app.focus-mode .controls { margin-top: 0; gap: 18px; }
+#app.focus-mode .ctl-label { display: none; }
+#app.focus-mode .ctl-btn { width: 44px; height: 44px; font-size: 19px; }
 /* compact the top bar: keep the avatar, drop the name */
 #app.focus-mode .id-name { display: none; }
 #app.focus-mode .app-bar { margin-bottom: 0; }

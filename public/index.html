@@ -137,8 +137,18 @@
   </section>
 
   <section class="controls">
-    <button id="skip" class="primary hidden" disabled>Skip</button>
-    <button id="mute" class="hidden" disabled>Mute</button>
+    <div class="ctl hidden" id="mute-ctl">
+      <button id="mute" class="ctl-btn" disabled aria-label="Mute">
+        <span class="ctl-ico" id="mute-ico">🎙️</span>
+      </button>
+      <span class="ctl-label" id="mute-label">Mute</span>
+    </div>
+    <div class="ctl hidden" id="skip-ctl">
+      <button id="skip" class="ctl-btn ctl-accent" disabled aria-label="Skip to next person">
+        <span class="ctl-ico">⏭</span>
+      </button>
+      <span class="ctl-label">Skip</span>
+    </div>
   </section>
 
   <section id="chat" class="chat hidden">

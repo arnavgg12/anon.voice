@@ -10,6 +10,10 @@ const heroOnlineEl = document.getElementById('hero-online');
 // ---- Controls ----
 const skipBtn = document.getElementById('skip');
 const muteBtn = document.getElementById('mute');
+const skipCtl = document.getElementById('skip-ctl');
+const muteCtl = document.getElementById('mute-ctl');
+const muteIco = document.getElementById('mute-ico');
+const muteLabel = document.getElementById('mute-label');
 const reportBtn = document.getElementById('report');
 const addFriendBtn = document.getElementById('add-friend');
 
@@ -372,14 +376,14 @@ function configureControls() {
   const inRandom = mode === 'random';
   const inRoom = mode === 'room';
   // Skip — random only
-  skipBtn.classList.toggle('hidden', !inRandom);
+  skipCtl.classList.toggle('hidden', !inRandom);
   skipBtn.disabled = !inRandom;
   // Report — random only (1-on-1 has a single partner to report)
   reportBtn.classList.toggle('hidden', !inRandom);
   reportBtn.disabled = !inRandom;
   // Mute — any voice mode (not text-only random)
   const showMute = inRoom || (inRandom && !textOnly);
-  muteBtn.classList.toggle('hidden', !showMute);
+  muteCtl.classList.toggle('hidden', !showMute);
   muteBtn.disabled = !showMute;
   // Add friend — random (1-on-1) only; enabled once the channel + hello arrive
   addFriendBtn.classList.toggle('hidden', !inRandom);
@@ -392,7 +396,8 @@ function applyMute() {
   if (localStream) {
     localStream.getAudioTracks().forEach((t) => (t.enabled = !isMuted));
   }
-  muteBtn.textContent = isMuted ? 'Unmute' : 'Mute';
+  muteIco.textContent = isMuted ? '🔇' : '🎙️';
+  muteLabel.textContent = isMuted ? 'Unmute' : 'Mute';
   muteBtn.classList.toggle('muted', isMuted);
 }
 
