@@ -285,22 +285,31 @@ function registerPresence() {
   renderFriends();
 }
 
+// Crisp inline SVG icons for the add-friend button's four states.
+const ADD_FRIEND_SVG = {
+  add:  '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>',
+  pending: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  friends: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M16 11l2 2 4-4"/></svg>',
+};
+function setAddFriendState(state, title) {
+  addFriendBtn.innerHTML = ADD_FRIEND_SVG[state] || ADD_FRIEND_SVG.add;
+  addFriendBtn.title = title;
+  addFriendBtn.setAttribute('aria-label', title);
+  addFriendBtn.classList.toggle('added', state === 'friends');
+}
+
 function resetFriendButton() {
   iSentFriendReq = false;
   peerSentFriendReq = false;
   partnerGuestId = null;
-  addFriendBtn.textContent = '＋';
-  addFriendBtn.title = 'Add friend';
-  addFriendBtn.classList.remove('added');
+  setAddFriendState('add', 'Add friend');
   addFriendBtn.disabled = true;
 }
 
 function maybeMutualFriend() {
   if (iSentFriendReq && peerSentFriendReq && partnerGuestId && partnerIdentity) {
     addFriendRecord(partnerGuestId, partnerIdentity.name, partnerIdentity.emoji);
-    addFriendBtn.textContent = '✓';
-    addFriendBtn.title = 'Friends';
-    addFriendBtn.classList.add('added');
+    setAddFriendState('friends', 'Friends');
     addFriendBtn.disabled = true;
     appendSystem(`You're now friends with ${partnerIdentity.emoji} ${partnerIdentity.name}. Find each other from the home screen.`);
   }
@@ -470,9 +479,7 @@ function setupChatChannel(channel) {
         announcePartner();     // "You're now talking with X" — same name both sides
         const known = loadFriends().some((f) => f.id === partnerGuestId);
         if (known) {
-          addFriendBtn.textContent = '✓';
-          addFriendBtn.title = 'Friends';
-          addFriendBtn.classList.add('added');
+          setAddFriendState('friends', 'Friends');
           addFriendBtn.disabled = true;
         }
       }
@@ -1285,10 +1292,9 @@ addFriendBtn.addEventListener('click', () => {
   if (peerSentFriendReq) {
     maybeMutualFriend();
   } else {
-    addFriendBtn.textContent = '⏳';
-    addFriendBtn.title = 'Friend request sent';
+    setAddFriendState('pending', 'Friend request sent');
     addFriendBtn.disabled = true;
-    appendSystem('Friend request sent — they need to tap ＋ too.');
+    appendSystem('Friend request sent — they need to tap the add-friend button too.');
   }
 });
 
