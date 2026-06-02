@@ -111,10 +111,15 @@
     return n;
   }
 
-  // Render the board into `container`. opts: { onReveal(x,y), onFlag(x,y), flagMode }
+  // Render the board into `container`.
+  // opts: { onReveal(x,y), onFlag(x,y), flagMode,
+  //         cursor:{x,y}|null,            // YOUR keyboard cursor (highlight)
+  //         peerCursor:{x,y,color}|null } // partner's cursor (tinted ring)
   function renderBoard(board, container, statusEl, opts) {
     opts = opts || {};
     const flagMode = !!opts.flagMode;
+    const cur = opts.cursor;
+    const peer = opts.peerCursor;
     container.style.setProperty('--cols', COLS);
     container.innerHTML = '';
 
@@ -130,6 +135,11 @@
         } else if (c.flagged) {
           el.classList.add('flag');
           el.textContent = '🚩';
+        }
+        if (cur && cur.x === x && cur.y === y) el.classList.add('cursor');
+        if (peer && peer.x === x && peer.y === y) {
+          el.classList.add('peer-cursor');
+          if (peer.color) el.style.setProperty('--peer', peer.color);
         }
 
         const primary = () => (flagMode ? opts.onFlag : opts.onReveal) && (flagMode ? opts.onFlag(x, y) : opts.onReveal(x, y));

@@ -102,6 +102,8 @@ let peerWasConnected = false;   // did this peer ever reach 'connected'? (for so
 let chatChannel = null;
 let board = null;
 let mineFlagMode = false;
+let mineCursor = null;       // YOUR keyboard cursor {x,y} on the minesweeper board
+let minePeerCursor = null;   // partner's cursor {x,y,color}, shown as a tinted ring
 let sudokuState = null;
 let c4State = null;
 let tttState = null;
@@ -540,6 +542,8 @@ function setupChatChannel(channel) {
       if (board) { Minesweeper.revealCell(board, msg.x, msg.y); renderGame(); }
     } else if (msg.type === 'flag') {
       if (board) { Minesweeper.toggleFlag(board, msg.x, msg.y); renderGame(); }
+    } else if (msg.type === 'mine-cursor') {
+      if (board) { minePeerCursor = { x: msg.x, y: msg.y, color: msg.color || '#ff5cab' }; renderGame(); }
     } else if (msg.type === 'sudoku-start') {
       startSudoku(msg.seed, false);
     } else if (msg.type === 'sudoku-fill') {
@@ -626,19 +630,47 @@ function renderGame() {
   if (!board) return;
   Minesweeper.renderBoard(board, boardEl, gameStatusEl, {
     flagMode: mineFlagMode,
+    cursor: mineCursor,
+    peerCursor: minePeerCursor,
     onReveal: (x, y) => {
       if (!board || board.over) return;
+      mineCursor = { x, y };           // tapping also moves your cursor there
+      broadcastMineCursor();
       Minesweeper.revealCell(board, x, y);
       sendOverChannel({ type: 'reveal', x, y });
       renderGame();
     },
     onFlag: (x, y) => {
       if (!board || board.over) return;
+      mineCursor = { x, y };
+      broadcastMineCursor();
       Minesweeper.toggleFlag(board, x, y);
       sendOverChannel({ type: 'flag', x, y });
       renderGame();
     },
   });
+}
+
+// Tell the partner where my cursor is so they can follow along.
+function broadcastMineCursor() {
+  if (!mineCursor) return;
+  const me = (typeof selfIdentity === 'function') ? selfIdentity() : null;
+  sendOverChannel({ type: 'mine-cursor', x: mineCursor.x, y: mineCursor.y, color: me ? me.color : '#7c6cff' });
+}
+
+// Move my keyboard cursor by (dx,dy), clamped to the board, and broadcast it.
+function moveMineCursor(dx, dy) {
+  if (!board) return;
+  const C = Minesweeper.COLS, R = Minesweeper.ROWS;
+  if (!mineCursor) { mineCursor = { x: (C / 2) | 0, y: (R / 2) | 0 }; }
+  else {
+    mineCursor = {
+      x: Math.min(C - 1, Math.max(0, mineCursor.x + dx)),
+      y: Math.min(R - 1, Math.max(0, mineCursor.y + dy)),
+    };
+  }
+  broadcastMineCursor();
+  renderGame();
 }
 
 function setFlagMode(on) {
@@ -652,6 +684,8 @@ function setFlagMode(on) {
 
 function startGame(seed, broadcast) {
   board = Minesweeper.buildBoard(seed);
+  mineCursor = null;
+  minePeerCursor = null;
   setFlagMode(false);
   switchTab('mines');
   if (broadcast) sendOverChannel({ type: 'game-start', seed });
@@ -1478,7 +1512,29 @@ document.addEventListener('keydown', (e) => {
   const activeTab = document.querySelector('.tab.active')?.dataset.tab;
   if (!activeTab) return;
 
-  if (activeTab === 'sudoku' && sudokuState) {
+  if (activeTab === 'mines' && board) {
+    if (e.key.startsWith('Arrow')) {
+      if (e.key === 'ArrowUp') moveMineCursor(0, -1);
+      else if (e.key === 'ArrowDown') moveMineCursor(0, 1);
+      else if (e.key === 'ArrowLeft') moveMineCursor(-1, 0);
+      else if (e.key === 'ArrowRight') moveMineCursor(1, 0);
+      e.preventDefault();
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      if (mineCursor && !board.over) {
+        Minesweeper.revealCell(board, mineCursor.x, mineCursor.y);
+        sendOverChannel({ type: 'reveal', x: mineCursor.x, y: mineCursor.y });
+        renderGame();
+      }
+      e.preventDefault();
+    } else if (e.key === 'f' || e.key === 'F') {
+      if (mineCursor && !board.over) {
+        Minesweeper.toggleFlag(board, mineCursor.x, mineCursor.y);
+        sendOverChannel({ type: 'flag', x: mineCursor.x, y: mineCursor.y });
+        renderGame();
+      }
+      e.preventDefault();
+    }
+  } else if (activeTab === 'sudoku' && sudokuState) {
     if (e.key >= '1' && e.key <= '9') {
       handleSudokuInput(parseInt(e.key, 10)); e.preventDefault();
     } else if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') {

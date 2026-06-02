@@ -533,6 +533,10 @@ button:focus-visible, .tab:focus-visible, a:focus-visible { outline: 2px solid v
 .ms-cell.n6 { color: var(--cyan); }
 .ms-cell.n7 { color: #ffffff; }
 .ms-cell.n8 { color: var(--muted); }
+/* Your keyboard cursor + the partner's live cursor (so you can follow them) */
+.ms-cell.cursor { box-shadow: 0 0 0 2px var(--fg) inset; }
+.ms-cell.peer-cursor { box-shadow: 0 0 0 2px var(--peer, var(--pink)) inset; }
+.ms-cell.cursor.peer-cursor { box-shadow: 0 0 0 2px var(--fg) inset, 0 0 0 4px var(--peer, var(--pink)) inset; }
 /* Flag-mode toggle in the game bar (square, not oval) */
 .ms-flag {
   flex: none; width: 38px; height: 38px; padding: 0; border-radius: 11px;
